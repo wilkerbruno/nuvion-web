@@ -37,9 +37,9 @@ services:
       DB_NAME: "browser"
       DB_USER: "admin"
       DB_PASSWORD: "V71C2Fd1eqJ8p0Pn0x4aO5mW"
-      SECRET_KEY: "TROQUE-ESTA-CHAVE-MINIMO-32-CHARS"
-      FRONTEND_URL: "https://app.seudominio.com"
-      CORS_ORIGINS: '["https://app.seudominio.com"]'
+      SECRET_KEY: "07530cb57db1624d545db8968991a93dc53c2f14f950b91746e683708e43398f"
+      FRONTEND_URL: "https://app.divisions_nuvion_web:"
+      CORS_ORIGINS: '["https://app.divisions_nuvion_web"]'
       REDIS_URL: "redis://redis:6379/0"
       MP_WEBHOOK_SECRET: ""
       DEBUG: "false"
@@ -60,7 +60,7 @@ services:
       DB_USER: "admin"
       DB_PASSWORD: "V71C2Fd1eqJ8p0Pn0x4aO5mW"
       REDIS_URL: "redis://redis:6379/0"
-      SECRET_KEY: "TROQUE-ESTA-CHAVE-MINIMO-32-CHARS"
+      SECRET_KEY: "07530cb57db1624d545db8968991a93dc53c2f14f950b91746e683708e43398f"
       DISPLAY: ":99"
       CHROME_BIN: "/usr/bin/chromium"
       CHROMEDRIVER_PATH: "/usr/bin/chromedriver"
