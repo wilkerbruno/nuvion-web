@@ -1,10 +1,13 @@
 # backend/core/database.py
+import logging
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 
 from core.config import settings
-from utils.logger import LOGGER
+
+logger = logging.getLogger("nuvion.db")
 
 
 engine = create_engine(
@@ -28,7 +31,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def get_db() -> Session:
-    """Dependency para injeção de sessão do banco nas rotas."""
     db = SessionLocal()
     try:
         yield db
@@ -37,11 +39,10 @@ def get_db() -> Session:
 
 
 def init_db():
-    """Testa a conexão ao iniciar o servidor."""
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        LOGGER.debug("Banco conectado com sucesso")
+        logger.info("Banco conectado com sucesso")
     except Exception as e:
-        LOGGER.error(f"Falha ao conectar ao banco: {e}")
+        logger.error(f"Falha ao conectar ao banco: {e}")
         raise
