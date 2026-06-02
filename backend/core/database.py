@@ -31,6 +31,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def get_db() -> Session:
+    """Dependency para injeção de sessão do banco nas rotas."""
     db = SessionLocal()
     try:
         yield db
@@ -39,6 +40,7 @@ def get_db() -> Session:
 
 
 def init_db():
+    """Testa a conexão ao iniciar o servidor."""
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))

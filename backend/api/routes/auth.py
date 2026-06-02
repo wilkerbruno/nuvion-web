@@ -1,6 +1,6 @@
 # backend/api/routes/auth.py
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
 from core.database import get_db
@@ -23,7 +23,7 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     username: str
     password: str
-    email: str
+    email: EmailStr
     name: str
     phone: str
     referral_code: str
