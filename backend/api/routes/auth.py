@@ -1,6 +1,6 @@
 # backend/api/routes/auth.py
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, str
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from core.database import get_db
