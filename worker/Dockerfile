@@ -10,3 +10,4 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 CMD ["sh", "-c", "Xvfb :99 -screen 0 1920x1080x24 & sleep 1 && DISPLAY=:99 celery -A workers.chrome_worker worker --concurrency=2 --loglevel=warning"]
+#EXPOSE 5555

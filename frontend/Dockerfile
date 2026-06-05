@@ -15,6 +15,7 @@ ARG VITE_WS_URL=wss://divisions-nuvion-web-api.lcgx8u.easypanel.host
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_WS_URL=$VITE_WS_URL
 
+#rodando o bild do frontend
 RUN npm run build
 
 FROM nginx:alpine
