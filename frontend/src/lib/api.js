@@ -2,7 +2,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "/api",
+  baseURL: import.meta.env.VITE_API_URL || "https://divisions-nuvion-web-api.lcgx8u.easypanel.host/api",
   timeout: 30000,
 });
 
