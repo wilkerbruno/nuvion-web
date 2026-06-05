@@ -1,47 +1,24 @@
 # backend/core/config.py
 import os
-from typing import List
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # App
-    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "TROQUE-ESTA-CHAVE-EM-PRODUCAO")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    DEBUG: bool = False
+    SECRET_KEY: str = "TROQUE-ESTA-CHAVE-EM-PRODUCAO"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
-    # Banco
-    DB_HOST: str = os.getenv("DB_HOST", "2.25.131.174")
-    DB_PORT: int = int(os.getenv("DB_PORT", "33060"))
-    DB_NAME: str = os.getenv("DB_NAME", "browser")
-    DB_USER: str = os.getenv("DB_USER", "admin")
-    DB_PASSWORD: str = os.getenv("DB_PASSWORD", "V71C2Fd1eqJ8p0Pn0x4aO5mW")
+    DB_HOST: str = "2.25.131.174"
+    DB_PORT: int = 33060
+    DB_NAME: str = "browser"
+    DB_USER: str = "admin"
+    DB_PASSWORD: str = "V71C2Fd1eqJ8p0Pn0x4aO5mW"
 
-    # CORS — aceita qualquer origem configurada via env
-    @property
-    def CORS_ORIGINS(self) -> List[str]:
-        frontend = os.getenv("FRONTEND_URL", "")
-        origins = [
-            "http://localhost:5173",
-            "http://localhost:3000",
-        ]
-        if frontend:
-            origins.append(frontend)
-        # Suporte a múltiplas origens via EXTRA_CORS_ORIGINS separadas por vírgula
-        extra = os.getenv("EXTRA_CORS_ORIGINS", "")
-        if extra:
-            origins.extend([o.strip() for o in extra.split(",") if o.strip()])
-        return origins
-
-    # Redis
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-
-    # Projeto desktop
-    DESKTOP_PROJECT_PATH: str = os.getenv("DESKTOP_PROJECT_PATH", "/opt/nuvion-desktop")
-
-    # Mercado Pago
-    MP_WEBHOOK_SECRET: str = os.getenv("MP_WEBHOOK_SECRET", "")
+    FRONTEND_URL: str = "https://divisions-nuvion-web.lcgx8u.easypanel.host"
+    REDIS_URL: str = "redis://localhost:6379/0"
+    DESKTOP_PROJECT_PATH: str = "/opt/nuvion-desktop"
+    MP_WEBHOOK_SECRET: str = ""
 
     @property
     def DATABASE_URL(self) -> str:
@@ -56,3 +33,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# CORS origins — sempre atualizado com o FRONTEND_URL real
+CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    settings.FRONTEND_URL,
+]
