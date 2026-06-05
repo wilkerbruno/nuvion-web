@@ -10,8 +10,8 @@ RUN npm install --silent
 
 COPY frontend/ .
 
-ARG VITE_API_URL=https://api.seudominio.com/api
-ARG VITE_WS_URL=wss://api.seudominio.com
+ARG VITE_API_URL=https://divisions-nuvion-web-api.lcgx8u.easypanel.host/api
+ARG VITE_WS_URL=wss://divisions-nuvion-web-api.lcgx8u.easypanel.host
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_WS_URL=$VITE_WS_URL
 
