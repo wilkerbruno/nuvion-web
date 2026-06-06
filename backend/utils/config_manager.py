@@ -1,12 +1,11 @@
+import logging
 import json
 import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
-import keyring
 
-from utils.logger import LOGGER
 
 
 @dataclass
@@ -48,7 +47,7 @@ class HardcodedConfigManager:
         self.config_dir.mkdir(exist_ok=True)
         self.config_file = self.config_dir / "config.json"
         
-        LOGGER.info("ConfigManager inicializado com credenciais hardcoded")
+        logging.getLogger("config_manager").info("ConfigManager inicializado com credenciais hardcoded")
 
     def get_database_config(self) -> DatabaseConfig:
         """Retorna configuração do banco com credenciais hardcoded"""
@@ -68,11 +67,11 @@ class HardcodedConfigManager:
                 password=db_password,
             )
             
-            LOGGER.info(f"Configuração DB carregada: {config.user}@{config.host}:{config.port}/{config.database}")
+            logging.getLogger("config_manager").info(f"Configuração DB carregada: {config.user}@{config.host}:{config.port}/{config.database}")
             return config
 
         except Exception as e:
-            LOGGER.error(f"Erro ao carregar configuração do banco: {e}")
+            logging.getLogger("config_manager").error(f"Erro ao carregar configuração do banco: {e}")
             # Retornar configuração padrão hardcoded
             return DatabaseConfig()
 
@@ -80,17 +79,17 @@ class HardcodedConfigManager:
         """Sempre retorna True pois credenciais estão hardcoded"""
         config = self.get_database_config()
         has_creds = bool(config.user and config.password)
-        LOGGER.info(f"Credenciais disponíveis: {has_creds}")
+        logging.getLogger("config_manager").info(f"Credenciais disponíveis: {has_creds}")
         return has_creds
 
     def store_database_credentials(self, user: str, password: str) -> None:
         """Método deprecado - credenciais são hardcoded"""
-        LOGGER.warning("store_database_credentials() ignorado - usando credenciais hardcoded")
+        logging.getLogger("config_manager").warning("store_database_credentials() ignorado - usando credenciais hardcoded")
         pass
 
     def reset_database_credentials(self) -> None:
         """Método deprecado - credenciais são hardcoded"""
-        LOGGER.warning("reset_database_credentials() ignorado - usando credenciais hardcoded")
+        logging.getLogger("config_manager").warning("reset_database_credentials() ignorado - usando credenciais hardcoded")
         pass
 
     def save_app_config(self, config: AppConfig) -> None:
@@ -99,24 +98,24 @@ class HardcodedConfigManager:
             config_data = asdict(config)
             with open(self.config_file, "w") as f:
                 json.dump(config_data, f, indent=2)
-            LOGGER.info("Configurações da aplicação salvas")
+            logging.getLogger("config_manager").info("Configurações da aplicação salvas")
         except Exception as e:
-            LOGGER.error(f"Erro ao salvar configurações: {e}")
+            logging.getLogger("config_manager").error(f"Erro ao salvar configurações: {e}")
 
     def load_app_config(self) -> AppConfig:
         """Carrega configurações da aplicação"""
         try:
             if not self.config_file.exists():
-                LOGGER.info("Arquivo de configuração não existe, usando padrões")
+                logging.getLogger("config_manager").info("Arquivo de configuração não existe, usando padrões")
                 return AppConfig()
 
             with open(self.config_file, "r") as f:
                 config_dict = json.load(f)
 
-            LOGGER.info("Configurações da aplicação carregadas")
+            logging.getLogger("config_manager").info("Configurações da aplicação carregadas")
             return AppConfig(**config_dict)
         except Exception as e:
-            LOGGER.error(f"Erro ao carregar configurações: {e}")
+            logging.getLogger("config_manager").error(f"Erro ao carregar configurações: {e}")
             return AppConfig()
 
     def save_smtp_config(self, config: SMTPConfig) -> None:
@@ -128,9 +127,9 @@ class HardcodedConfigManager:
             with open(smtp_file, "w") as f:
                 json.dump(config_data, f, indent=2)
             
-            LOGGER.info("Configurações SMTP salvas com sucesso")
+            logging.getLogger("config_manager").info("Configurações SMTP salvas com sucesso")
         except Exception as e:
-            LOGGER.error(f"Erro ao salvar configurações SMTP: {e}")
+            logging.getLogger("config_manager").error(f"Erro ao salvar configurações SMTP: {e}")
 
     def load_smtp_config(self) -> SMTPConfig:
         """Carrega configurações SMTP"""
@@ -138,16 +137,16 @@ class HardcodedConfigManager:
             smtp_file = self.config_dir / "smtp_config.json"
             
             if not smtp_file.exists():
-                LOGGER.info("Arquivo de configuração SMTP não existe, usando padrões")
+                logging.getLogger("config_manager").info("Arquivo de configuração SMTP não existe, usando padrões")
                 return SMTPConfig()
 
             with open(smtp_file, "r") as f:
                 config_dict = json.load(f)
 
-            LOGGER.info("Configurações SMTP carregadas")
+            logging.getLogger("config_manager").info("Configurações SMTP carregadas")
             return SMTPConfig(**config_dict)
         except Exception as e:
-            LOGGER.error(f"Erro ao carregar configurações SMTP: {e}")
+            logging.getLogger("config_manager").error(f"Erro ao carregar configurações SMTP: {e}")
             return SMTPConfig()
 
     def has_smtp_config(self) -> bool:
@@ -161,7 +160,7 @@ class HardcodedConfigManager:
             )
             return has_config
         except Exception as e:
-            LOGGER.error(f"Erro ao verificar configurações SMTP: {e}")
+            logging.getLogger("config_manager").error(f"Erro ao verificar configurações SMTP: {e}")
             return False
 
 
