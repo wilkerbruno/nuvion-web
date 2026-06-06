@@ -13,3 +13,7 @@ requests==2.32.3
 python-multipart==0.0.12
 httpx==0.27.2
 email-validator==2.2.0
+psutil==5.9.8
+keyring==25.2.1
+beautifulsoup4==4.12.3
+
