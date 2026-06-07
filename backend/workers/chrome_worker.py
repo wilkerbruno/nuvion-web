@@ -1,6 +1,6 @@
 # backend/workers/chrome_worker.py
 """
-Worker de automação — roda como processo separado no VPS.
+Worker de automacao — roda como processo separado no VPS.
 Consome jobs da fila Redis (via Celery) e executa abertura do Chrome.
 
 Iniciar:
@@ -11,7 +11,6 @@ import os
 import sys
 import uuid
 
-import redis
 from celery import Celery
 
 # Adicionar o projeto desktop ao path
@@ -29,22 +28,50 @@ celery_app.conf.update(
     result_serializer="json",
     accept_content=["json"],
     task_track_started=True,
-    worker_prefetch_multiplier=1,          # Um job por vez por worker
-    task_acks_late=True,                   # Confirmar só após concluir
+    worker_prefetch_multiplier=1,
+    task_acks_late=True,
     task_reject_on_worker_lost=True,
 )
 
-_redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
+# ---------------------------------------------------------------------------
+# Redis lazy — nao conecta no import, so quando a task roda no worker.
+# Evita que a API trave ao importar celery_app sem Redis disponivel.
+# ---------------------------------------------------------------------------
+_redis_client = None
+
+
+def _get_redis():
+    global _redis_client
+    if _redis_client is None:
+        import redis as redis_lib
+        _redis_client = redis_lib.from_url(
+            settings.REDIS_URL, decode_responses=True
+        )
+    return _redis_client
 
 
 def _publish(job_id: str, event_type: str, data: dict = None):
-    """Publica evento no canal Redis do job (consumido pelo WebSocket)."""
-    msg = json.dumps({"type": event_type, "data": data or {}})
-    _redis.publish(f"job:{job_id}", msg)
-    # Salvar resultado final para polling HTTP
-    if event_type in ("opened", "error", "done"):
-        _redis.setex(f"job_result:{job_id}", 3600, msg)
+    """
+    Publica evento no canal Redis do job (consumido pelo WebSocket).
+    Formato: {"type": "...", "data": {...}}
+    """
+    try:
+        r = _get_redis()
+        msg = json.dumps({"type": event_type, "data": data or {}})
+        r.publish(f"job:{job_id}", msg)
+        # Salvar resultado final para polling HTTP (expira em 1h)
+        if event_type in ("opened", "error", "done"):
+            r.setex(f"job_result:{job_id}", 3600, msg)
+    except Exception as e:
+        import logging
+        logging.getLogger("NuvionBrowser").warning(
+            f"Nao foi possivel publicar evento {event_type} para job {job_id}: {e}"
+        )
 
+
+# ---------------------------------------------------------------------------
+# Task principal
+# ---------------------------------------------------------------------------
 
 @celery_app.task(name="open_tool", bind=True, max_retries=1, soft_time_limit=90)
 def open_tool_task(self, job_id: str, user_id: str, tool_id: str):
@@ -60,14 +87,14 @@ def open_tool_task(self, job_id: str, user_id: str, tool_id: str):
 
         tool = crud_system.ai_tools.get_by_id(tool_id)
         if not tool:
-            _publish(job_id, "error", {"message": "Ferramenta não encontrada"})
+            _publish(job_id, "error", {"message": "Ferramenta nao encontrada"})
             return
 
         _publish(job_id, "starting", {"message": f"Abrindo {tool.name}..."})
 
         # Reutiliza CookieBrowserManager do projeto desktop
         manager = CookieBrowserManager()
-        driver = manager.open_url_by_id(tool_id)
+        driver = manager.open_tool_by_id(tool_id)
 
         if driver:
             _publish(job_id, "opened", {
@@ -81,19 +108,6 @@ def open_tool_task(self, job_id: str, user_id: str, tool_id: str):
 
     except Exception as exc:
         _publish(job_id, "error", {"message": str(exc)})
-        raise self.retry(exc=exc, countdown=5) if self.request.retries < 1 else exc
-
-
-# ── Client helper (usado pelas rotas FastAPI) ─────────────────────────────────
-
-class WorkerClient:
-    def enqueue_open_tool(self, user_id: str, tool_id: str) -> str:
-        job_id = str(uuid.uuid4())
-        open_tool_task.apply_async(
-            kwargs={"job_id": job_id, "user_id": user_id, "tool_id": tool_id},
-            task_id=job_id,
-        )
-        return job_id
-
-
-worker_client = WorkerClient()
+        if self.request.retries < 1:
+            raise self.retry(exc=exc, countdown=5)
+        raise exc
