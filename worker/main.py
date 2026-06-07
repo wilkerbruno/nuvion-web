@@ -11,7 +11,7 @@ import threading
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-# Path do projeto desktop (onde estão crud/, database/, core/, etc)
+# Path do projeto (onde estão crud/, database/, core/, etc)
 DESKTOP_PATH = os.environ.get("DESKTOP_PROJECT_PATH", "/app")
 if DESKTOP_PATH not in sys.path:
     sys.path.insert(0, DESKTOP_PATH)
@@ -32,12 +32,45 @@ class OpenToolRequest(BaseModel):
     tool_id: str
 
 
+def _open_chrome(tool_id: str, url: str, email=None, password=None,
+                 cookies_data=None, proxy_url=None, block_extensions=False):
+    """Abre Chrome UC diretamente — sem depender do chrome_browser_manager do desktop."""
+    import undetected_chromedriver as uc
+
+    options = uc.ChromeOptions()
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument(f"--display={os.environ.get('DISPLAY', ':99')}")
+
+    if proxy_url:
+        options.add_argument(f"--proxy-server={proxy_url}")
+
+    driver = uc.Chrome(options=options, headless=False)
+    driver.get(url)
+
+    # Injetar cookies se existirem
+    if cookies_data:
+        try:
+            driver.delete_all_cookies()
+            for cookie in (cookies_data if isinstance(cookies_data, list) else []):
+                try:
+                    driver.add_cookie(cookie)
+                except Exception:
+                    pass
+            driver.refresh()
+        except Exception as e:
+            LOGGER.warning(f"[Worker] Erro ao injetar cookies: {e}")
+
+    LOGGER.info(f"[Worker] Chrome aberto em: {url}")
+    return driver
+
+
 def _open_tool_background(job_id: str, user_id: str, tool_id: str):
     """Abre Chrome UC em thread separada — não bloqueia o uvicorn."""
     LOGGER.info(f"[Worker] Iniciando job {job_id} | tool={tool_id}")
     try:
         from crud.crud_manager import crud_system
-        from core.managers.chrome_browser_manager import chrome_browser_manager
 
         ia = crud_system.ai_tools.get_by_id_with_relationships(
             tool_id, "direct_credentials", "proxy"
@@ -93,19 +126,19 @@ def _open_tool_background(job_id: str, user_id: str, tool_id: str):
             except Exception as e:
                 LOGGER.warning(f"[Worker] Proxy erro: {e}")
 
-        # Abrir Chrome
-        driver = chrome_browser_manager.open_chrome_for_tool(
-            ai_tool_id=tool_id,
-            target_url=ia.url,
+        # Abrir Chrome diretamente (sem chrome_browser_manager do desktop)
+        driver = _open_chrome(
+            tool_id=tool_id,
+            url=ia.url,
             email=email,
             password=password,
-            block_extensions=bool(getattr(ia, "block_extensions", False)),
             cookies_data=cookies_data,
             proxy_url=proxy_url,
+            block_extensions=bool(getattr(ia, "block_extensions", False)),
         )
 
         if driver:
-            LOGGER.info(f"[Worker] ✅ {ia.name} aberto com sucesso!")
+            LOGGER.info(f"[Worker] ✅ CLAUDE DIVISIONS {ia.name} aberto com sucesso!")
         else:
             LOGGER.error(f"[Worker] ❌ Falha ao abrir {ia.name}")
 
