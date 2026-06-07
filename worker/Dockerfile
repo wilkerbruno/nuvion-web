@@ -9,19 +9,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 xdg-utils && \
     rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements da pasta worker/
 COPY worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar todo o conteúdo da pasta worker/
 COPY worker/ .
 
+# Apenas Xvfb + uvicorn HTTP (sem Celery — jobs chegam via HTTP da API)
 CMD ["sh", "-c", "\
     Xvfb :99 -screen 0 1920x1080x24 -ac & \
     sleep 1 && \
     export DISPLAY=:99 && \
-    uvicorn main:app --host 0.0.0.0 --port 8001 --workers 1 & \
-    celery -A workers.chrome_worker worker --concurrency=2 --loglevel=warning \
+    uvicorn main:app --host 0.0.0.0 --port 8001 --workers 1 \
 "]
 
 EXPOSE 8001
