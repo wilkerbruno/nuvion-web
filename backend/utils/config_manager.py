@@ -1,11 +1,8 @@
-# utils/config_manager.py
+# backend/utils/config_manager.py
 # Versão web — sem keyring, sem PyQt6, sem dependências desktop
-import logging
 import os
 from dataclasses import dataclass
 from typing import Optional
-
-logger = logging.getLogger("nuvion.config")
 
 
 @dataclass
@@ -68,10 +65,18 @@ class HardcodedConfigManager:
         pass
 
     def load_smtp_config(self) -> SMTPConfig:
-        return SMTPConfig()
+        return SMTPConfig(
+            smtp_host=os.getenv("SMTP_HOST", "smtp.gmail.com"),
+            smtp_port=int(os.getenv("SMTP_PORT", "587")),
+            smtp_email=os.getenv("SMTP_EMAIL", ""),
+            smtp_password=os.getenv("SMTP_PASSWORD", ""),
+            smtp_use_tls=os.getenv("SMTP_TLS", "true").lower() == "true",
+            sender_name=os.getenv("SMTP_SENDER", "Nuvion Browser"),
+        )
 
     def has_smtp_config(self) -> bool:
-        return False
+        cfg = self.load_smtp_config()
+        return bool(cfg.smtp_email and cfg.smtp_password)
 
 
 config_manager = HardcodedConfigManager()

@@ -33,8 +33,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600,
 )
 
 app.include_router(auth.router,          prefix="/api/auth",          tags=["auth"])
@@ -49,5 +51,8 @@ app.include_router(worker.router,        prefix="/api/worker",        tags=["wor
 
 @app.get("/api/health")
 def health():
-    origins = CORS_ORIGINS
-    return {"status": "ok", "version": "1.0.0", "cors_origins": origins}
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "cors_origins": CORS_ORIGINS,
+    }
