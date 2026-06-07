@@ -1,15 +1,13 @@
 # backend/api/routes/worker.py
 """
 Rotas do worker Chrome.
-- GET  /api/worker/status/{job_id}  — polling HTTP
-- WS   /api/worker/ws/{job_id}      — WebSocket em tempo real
+- GET /api/worker/status/{job_id}  — polling HTTP
+- WS  /api/worker/ws/{job_id}      — WebSocket (com ou sem Redis)
 
-O chrome_worker.py publica eventos neste formato:
-  {"type": "starting"|"opened"|"error"|"done", "data": {...}}
-
-armazenados em:
-  Redis pub/sub canal : job:{job_id}
-  Redis key resultado : job_result:{job_id}
+Com Redis:    retransmite eventos pub/sub em tempo real
+Sem Redis:    envia status "queued" e depois "unavailable" rapidamente,
+              permitindo que o frontend saiba que o Chrome esta abrindo
+              mas sem acompanhamento em tempo real.
 """
 import asyncio
 import json
@@ -21,15 +19,14 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 LOGGER = logging.getLogger("NuvionBrowser")
 router = APIRouter()
 
-TERMINAL_TYPES = {"opened", "error", "done"}
+TERMINAL_TYPES = {"opened", "error", "done", "unavailable"}
 
 
 # ---------------------------------------------------------------------------
-# Helper Redis
+# Redis helpers
 # ---------------------------------------------------------------------------
 
 def _redis_client():
-    """Retorna cliente Redis ou None se indisponivel."""
     try:
         import redis
         from core.config import settings
@@ -41,13 +38,11 @@ def _redis_client():
         )
         r.ping()
         return r
-    except Exception as e:
-        LOGGER.debug(f"Redis indisponivel: {e}")
+    except Exception:
         return None
 
 
 def _get_saved_result(job_id: str) -> Optional[dict]:
-    """Busca resultado salvo (para jobs ja concluidos)."""
     r = _redis_client()
     if not r:
         return None
@@ -61,7 +56,7 @@ def _get_saved_result(job_id: str) -> Optional[dict]:
 
 
 # ---------------------------------------------------------------------------
-# HTTP polling (fallback)
+# HTTP polling
 # ---------------------------------------------------------------------------
 
 @router.get("/status/{job_id}")
@@ -73,11 +68,11 @@ def get_job_status(job_id: str):
     r = _redis_client()
     if not r:
         return {
-            "type": "error",
+            "type": "unavailable",
             "data": {
                 "message": (
-                    "Redis nao disponivel. Configure a variavel REDIS_URL "
-                    "e adicione o servico Redis no Easypanel."
+                    "Redis nao configurado. Chrome esta abrindo em background. "
+                    "Aguarde alguns segundos."
                 )
             },
         }
@@ -94,15 +89,9 @@ async def job_websocket(
     job_id: str,
     token: str = Query(...),
 ):
-    """
-    WebSocket que retransmite eventos do chrome_worker em tempo real.
-
-    Formato dos eventos (espelhado do chrome_worker._publish):
-      {"type": "starting"|"opened"|"error"|"done", "data": {...}}
-    """
     await websocket.accept()
 
-    # -- Validar JWT -------------------------------------------------------
+    # Validar JWT
     try:
         from core.security import decode_token
         payload = decode_token(token)
@@ -117,36 +106,49 @@ async def job_websocket(
         await websocket.close(code=4001)
         return
 
-    # -- Verificar Redis ---------------------------------------------------
+    # Verificar Redis
     r = _redis_client()
+
     if r is None:
+        # ── Sem Redis: informar que o Chrome esta abrindo em background ──
         await websocket.send_json({
-            "type": "error",
+            "type": "queued",
             "data": {
                 "message": (
-                    "Redis nao disponivel. "
-                    "Adicione o servico Redis no Easypanel e configure "
-                    "REDIS_URL nos containers da API e do worker."
+                    "Job iniciado. Chrome abrindo em background. "
+                    "Configure Redis no Easypanel para status em tempo real."
                 )
             },
         })
-        await websocket.close()
+        # Aguardar 3s e fechar — frontend pode exibir toast adequado
+        await asyncio.sleep(3)
+        await websocket.send_json({
+            "type": "unavailable",
+            "data": {
+                "message": "Chrome esta abrindo. Sem Redis nao e possivel confirmar quando estara pronto."
+            },
+        })
+        try:
+            await websocket.close()
+        except Exception:
+            pass
         return
 
-    # -- Resultado ja salvo? (job concluido antes do WS conectar) ----------
+    # ── Com Redis: pub/sub em tempo real ──────────────────────────────────
+
+    # Job ja concluido antes do WS conectar?
     saved = _get_saved_result(job_id)
     if saved and saved.get("type") in TERMINAL_TYPES:
         await websocket.send_json(saved)
         await websocket.close()
         return
 
-    # -- Subscribe e retransmitir eventos ----------------------------------
     await websocket.send_json({
         "type": "queued",
         "data": {"message": "Job enfileirado, aguardando worker..."},
     })
 
-    timeout = 120  # segundos maximos de espera
+    timeout = 120
     elapsed = 0
 
     try:
@@ -154,13 +156,11 @@ async def job_websocket(
         pubsub.subscribe(f"job:{job_id}")
 
         while elapsed < timeout:
-            # Checar mensagem (nao bloqueante, timeout=1s)
             msg = pubsub.get_message(timeout=1.0)
             if msg and msg["type"] == "message":
                 try:
                     data = json.loads(msg["data"])
                     await websocket.send_json(data)
-                    # Fechar ao receber evento terminal
                     if data.get("type") in TERMINAL_TYPES:
                         break
                 except Exception:
@@ -169,7 +169,6 @@ async def job_websocket(
             await asyncio.sleep(0.1)
             elapsed += 1
 
-            # Heartbeat a cada 15s para manter conexao viva
             if elapsed % 15 == 0:
                 try:
                     await websocket.send_json(
@@ -178,13 +177,10 @@ async def job_websocket(
                 except Exception:
                     break
         else:
-            # Timeout
             try:
                 await websocket.send_json({
                     "type": "error",
-                    "data": {
-                        "message": f"Timeout de {timeout}s — worker nao respondeu.",
-                    },
+                    "data": {"message": f"Timeout de {timeout}s — worker nao respondeu."},
                 })
             except Exception:
                 pass
@@ -193,9 +189,9 @@ async def job_websocket(
         pubsub.close()
 
     except WebSocketDisconnect:
-        LOGGER.info(f"WS desconectado pelo cliente: {job_id}")
+        LOGGER.info(f"WS desconectado: {job_id}")
     except Exception as e:
-        LOGGER.error(f"Erro no WS {job_id}: {e}")
+        LOGGER.error(f"Erro WS {job_id}: {e}")
         try:
             await websocket.send_json({"type": "error", "data": {"message": str(e)}})
         except Exception:

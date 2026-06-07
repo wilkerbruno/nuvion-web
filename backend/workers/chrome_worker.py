@@ -7,13 +7,13 @@ Iniciar:
   celery -A workers.chrome_worker worker --concurrency=4 --loglevel=info
 """
 import json
+import logging
 import os
 import sys
 import uuid
 
 from celery import Celery
 
-# Adicionar o projeto desktop ao path
 sys.path.insert(0, os.environ.get("DESKTOP_PROJECT_PATH", "/opt/nuvion-desktop"))
 
 from core.config import settings
@@ -31,11 +31,25 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_acks_late=True,
     task_reject_on_worker_lost=True,
+    # ── Falhar rapido se Redis cair (evita 20s de retry na API) ──────────
+    broker_transport_options={
+        "socket_connect_timeout": 3,
+        "socket_timeout": 3,
+        "retry_on_timeout": False,
+        "max_retries": 0,
+    },
+    result_backend_transport_options={
+        "socket_connect_timeout": 3,
+        "socket_timeout": 3,
+        "retry_on_timeout": False,
+        "max_retries": 0,
+    },
+    broker_connection_retry=False,       # nao tentar reconectar automaticamente
+    broker_connection_max_retries=0,
 )
 
 # ---------------------------------------------------------------------------
-# Redis lazy — nao conecta no import, so quando a task roda no worker.
-# Evita que a API trave ao importar celery_app sem Redis disponivel.
+# Redis lazy — so conecta quando a task roda, nao no import pela API
 # ---------------------------------------------------------------------------
 _redis_client = None
 
@@ -52,18 +66,16 @@ def _get_redis():
 
 def _publish(job_id: str, event_type: str, data: dict = None):
     """
-    Publica evento no canal Redis do job (consumido pelo WebSocket).
+    Publica evento no canal Redis do job.
     Formato: {"type": "...", "data": {...}}
     """
     try:
         r = _get_redis()
         msg = json.dumps({"type": event_type, "data": data or {}})
         r.publish(f"job:{job_id}", msg)
-        # Salvar resultado final para polling HTTP (expira em 1h)
         if event_type in ("opened", "error", "done"):
             r.setex(f"job_result:{job_id}", 3600, msg)
     except Exception as e:
-        import logging
         logging.getLogger("NuvionBrowser").warning(
             f"Nao foi possivel publicar evento {event_type} para job {job_id}: {e}"
         )
@@ -92,7 +104,6 @@ def open_tool_task(self, job_id: str, user_id: str, tool_id: str):
 
         _publish(job_id, "starting", {"message": f"Abrindo {tool.name}..."})
 
-        # Reutiliza CookieBrowserManager do projeto desktop
         manager = CookieBrowserManager()
         driver = manager.open_tool_by_id(tool_id)
 
