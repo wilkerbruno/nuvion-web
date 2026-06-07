@@ -9,12 +9,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 xdg-utils && \
     rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+# Copiar requirements da pasta worker/
+COPY worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copiar todo o conteúdo da pasta worker/
+COPY worker/ .
 
-# Inicia Xvfb (display virtual) + uvicorn HTTP (porta 8001) + Celery
 CMD ["sh", "-c", "\
     Xvfb :99 -screen 0 1920x1080x24 -ac & \
     sleep 1 && \
