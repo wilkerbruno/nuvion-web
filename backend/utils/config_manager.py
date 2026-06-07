@@ -60,7 +60,7 @@ class HardcodedConfigManager:
             port=int(os.getenv("DB_PORT", "3306")),
             database=os.getenv("DB_NAME", "browser"),
             user=os.getenv("DB_USER", "admin"),
-            password=os.getenv("DB_PASSWORD", ""),
+            password=os.getenv("DB_PASSWORD") or "V71C2Fd1eqJ8p0Pn0x4aO5mW",
         )
 
     def has_database_credentials(self) -> bool:
