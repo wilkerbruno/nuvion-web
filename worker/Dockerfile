@@ -12,13 +12,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Código do projeto desktop necessário para o worker
-COPY crud/ ./crud/
-COPY database/ ./database/
-COPY core/ ./core/
-COPY utils/ ./utils/
+# Código do projeto backend (crud, database, core, utils estão em backend/)
+COPY backend/crud/ ./crud/
+COPY backend/database/ ./database/
+COPY backend/core/ ./core/
+COPY backend/utils/ ./utils/
+COPY backend/workers/ ./workers/
 
-# Arquivos do worker
+# Arquivos do worker (main.py, etc)
 COPY worker/ .
 
 ENV DESKTOP_PROJECT_PATH=/app
