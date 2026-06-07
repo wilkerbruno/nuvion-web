@@ -9,19 +9,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 xdg-utils && \
     rm -rf /var/lib/apt/lists/*
 
-# Instalar dependências do worker
 COPY worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar código do projeto desktop (crud, database, core, utils)
-# necessário para o worker acessar o banco e abrir Chrome
+# Código do projeto desktop necessário para o worker
 COPY crud/ ./crud/
 COPY database/ ./database/
 COPY core/ ./core/
 COPY utils/ ./utils/
-COPY config/ ./config/
 
-# Copiar arquivos do worker por último
+# Arquivos do worker
 COPY worker/ .
 
 ENV DESKTOP_PROJECT_PATH=/app
