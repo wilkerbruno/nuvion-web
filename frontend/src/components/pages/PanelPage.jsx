@@ -185,7 +185,8 @@ export default function PanelPage() {
 
       const { accessToken } = useAuthStore.getState();
       const wsBase = (import.meta.env.VITE_API_URL || "https://divisions-nuvion-web-api.lcgx8u.easypanel.host")
-        .replace("https://", "wss://").replace("http://", "ws://");
+        .replace("https://", "wss://").replace("http://", "ws://")
+        .replace(/\/api$/, "");  // remove /api do final se existir
       const ws = new WebSocket(`${wsBase}/api/worker/ws/${jobId}?token=${accessToken}`);
 
       ws.onmessage = (e) => {
