@@ -184,9 +184,9 @@ export default function PanelPage() {
       toast.loading("Abrindo ferramenta...", { id: toastId });
 
       const { accessToken } = useAuthStore.getState();
-      const wsBase = (import.meta.env.VITE_API_URL || "https://divisions-nuvion-web-api.lcgx8u.easypanel.host")
+      const wsBase = (import.meta.env.VITE_API_URL || "https://divisions-nuvion-web-api.lcgx8u.easypanel.host/api")
         .replace("https://", "wss://").replace("http://", "ws://")
-        .replace(/\$/, "");  // remove /api do final se existir
+        .replace(/\/api$/, "");  // ← regex correto: remove /api do final
       const ws = new WebSocket(`${wsBase}/api/worker/ws/${jobId}?token=${accessToken}`);
 
       ws.onmessage = (e) => {
