@@ -186,15 +186,16 @@ export default function PanelPage() {
       const { accessToken } = useAuthStore.getState();
       const wsBase = (import.meta.env.VITE_API_URL || "https://divisions-nuvion-web-api.lcgx8u.easypanel.host/api")
         .replace("https://", "wss://").replace("http://", "ws://")
-        .replace(/\/api$/, "");  // ← regex correto: remove /api do final
+        .replace(/\/api$/, ""); // remove /api do final para não duplicar
       const ws = new WebSocket(`${wsBase}/api/worker/ws/${jobId}?token=${accessToken}`);
 
       ws.onmessage = (e) => {
         const event = JSON.parse(e.data);
         if (event.type === "opened" || event.type === "queued") {
           toast.success(`${toolName} aberta!`, { id: toastId });
-          // Abrir viewer noVNC
-          setViewer({ toolName });
+          // Abrir noVNC em nova aba
+          const novncUrl = `${NOVNC_URL}/vnc.html?autoconnect=true&reconnect=true&resize=scale&quality=6&compression=2&view_only=false`;
+          window.open(novncUrl, "_blank");
           ws.close();
         } else if (event.type === "error") {
           toast.error(event.data?.message || "Erro ao abrir", { id: toastId });
