@@ -2,7 +2,6 @@
 import os
 import sys
 from contextlib import asynccontextmanager
-from api.routes import auth, tools, favorites, payments, notifications, admin, proxy, worker, extension
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +9,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 sys.path.insert(0, os.environ.get("DESKTOP_PROJECT_PATH", "/opt/nuvion-desktop"))
 
-from api.routes import auth, tools, favorites, payments, notifications, admin, proxy, worker
+from api.routes import auth, tools, favorites, payments, notifications, admin, proxy, worker, extension
 from core.config import settings, CORS_ORIGINS
 from core.database import init_db
 
@@ -49,6 +48,7 @@ app.include_router(admin.router,         prefix="/api/admin",         tags=["adm
 app.include_router(proxy.router,         prefix="/api/proxy",         tags=["proxy"])
 app.include_router(worker.router,        prefix="/api/worker",        tags=["worker"])
 app.include_router(extension.router,     prefix="/api/extension",     tags=["extension"])
+
 
 @app.get("/api/health")
 def health():
