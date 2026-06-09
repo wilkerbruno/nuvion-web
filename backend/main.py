@@ -2,6 +2,7 @@
 import os
 import sys
 from contextlib import asynccontextmanager
+from api.routes import auth, tools, favorites, payments, notifications, admin, proxy, worker, extension
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,6 +48,7 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["not
 app.include_router(admin.router,         prefix="/api/admin",         tags=["admin"])
 app.include_router(proxy.router,         prefix="/api/proxy",         tags=["proxy"])
 app.include_router(worker.router,        prefix="/api/worker",        tags=["worker"])
+app.include_router(extension.router,     prefix="/api/extension",     tags=["extension"])
 
 
 @app.get("/api/health")
