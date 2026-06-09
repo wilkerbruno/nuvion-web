@@ -50,7 +50,6 @@ app.include_router(proxy.router,         prefix="/api/proxy",         tags=["pro
 app.include_router(worker.router,        prefix="/api/worker",        tags=["worker"])
 app.include_router(extension.router,     prefix="/api/extension",     tags=["extension"])
 
-
 @app.get("/api/health")
 def health():
     return {
