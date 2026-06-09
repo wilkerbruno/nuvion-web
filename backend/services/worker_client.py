@@ -1,102 +1,118 @@
 # backend/services/worker_client.py
 """
-Cliente do worker Chrome.
-
-Estrategia (em ordem de prioridade):
-  1. Celery + Redis  — producao ideal
-  2. HTTP para o container worker — fallback quando Redis nao existe
-     O container worker expoe POST http://worker:8001/open-tool
+Envia jobs para:
+1. Extensão Chrome do usuário (se conectada) — abre janela local, sem VNC
+2. Worker HTTP (container com Chrome headless + VNC) — fallback
 """
 import logging
-import os
 import uuid
+from typing import Optional
+
+import requests
 
 LOGGER = logging.getLogger("NuvionBrowser")
 
-# URL interna do container worker no Easypanel
-# Configuravel via env var WORKER_URL
-WORKER_HTTP_URL = os.getenv("WORKER_URL", "http://worker:8001")
+WORKER_URL = None
 
-_redis_ok: bool | None = None
+def _get_worker_url():
+    global WORKER_URL
+    if WORKER_URL is None:
+        try:
+            from core.config import settings
+            WORKER_URL = getattr(settings, "WORKER_URL", "http://nuvion_worker:8001")
+        except Exception:
+            WORKER_URL = "http://nuvion_worker:8001"
+    return WORKER_URL
 
 
-def _redis_available() -> bool:
-    global _redis_ok
-    if _redis_ok is not None:
-        return _redis_ok
+def _build_job_data(tool_id: str, user_id: str, job_id: str, tool=None, 
+                     creds=None, cookies=None, proxy=None) -> dict:
+    """Monta o payload do job com todas as informações necessárias."""
+    data = {
+        "job_id": job_id,
+        "tool_id": tool_id,
+        "user_id": user_id,
+        "url": getattr(tool, "url", ""),
+        "login_method": "manual",
+        "email": None,
+        "password": None,
+        "cookies": None,
+        "proxy": None,
+    }
+
+    if tool and hasattr(tool, "get_active_login_method"):
+        data["login_method"] = tool.get_active_login_method()
+
+    if creds:
+        data["email"] = getattr(creds, "username", None)
+        data["password"] = getattr(creds, "password", None)
+
+    if cookies:
+        data["cookies"] = cookies
+
+    if proxy:
+        data["proxy"] = {
+            "host": getattr(proxy, "host", ""),
+            "port": getattr(proxy, "port", 1080),
+            "type": getattr(proxy, "proxy_type", "socks5").lower(),
+            "username": getattr(proxy, "username", "") or "",
+            "password": getattr(proxy, "password", "") or "",
+        }
+
+    return data
+
+
+async def send_job_to_extension(user_id: str, job_data: dict) -> bool:
+    """Tenta enviar job para a extensão Chrome do usuário."""
     try:
-        import redis
-        from core.config import settings
-        r = redis.from_url(
-            settings.REDIS_URL,
-            socket_connect_timeout=2,
-            socket_timeout=2,
-        )
-        r.ping()
-        _redis_ok = True
-        LOGGER.info("Redis disponivel — usando Celery")
+        from api.routes.extension import send_open_tool, is_extension_connected
+        if not is_extension_connected(user_id):
+            return False
+        return await send_open_tool(user_id, job_data)
     except Exception as e:
-        _redis_ok = False
-        LOGGER.warning(f"Redis indisponivel ({e}) — usando HTTP para worker")
-    return _redis_ok
+        LOGGER.warning(f"[WorkerClient] Extensão indisponível: {e}")
+        return False
 
 
-def _call_worker_http(job_id: str, user_id: str, tool_id: str) -> bool:
-    """
-    Chama o endpoint HTTP do container worker.
-    O worker precisa estar rodando worker/main.py (FastAPI na porta 8001).
-    """
+def send_job_to_worker(job_id: str, user_id: str, tool_id: str) -> bool:
+    """Envia job para o worker HTTP (VNC fallback)."""
+    url = _get_worker_url()
     try:
-        import requests
-        url = f"{WORKER_HTTP_URL}/open-tool"
         resp = requests.post(
-            url,
+            f"{url}/open-tool",
             json={"job_id": job_id, "user_id": user_id, "tool_id": tool_id},
-            timeout=5,
+            timeout=10,
         )
         if resp.status_code == 200:
-            LOGGER.info(f"Job enviado ao worker via HTTP: {job_id}")
+            LOGGER.info(f"[WorkerClient] Job enviado ao worker HTTP: {job_id}")
             return True
-        LOGGER.warning(f"Worker HTTP retornou {resp.status_code}: {resp.text}")
-        return False
     except Exception as e:
-        LOGGER.warning(f"Falha ao chamar worker via HTTP ({e})")
-        return False
+        LOGGER.warning(f"[WorkerClient] Falha no worker HTTP: {e}")
+    return False
 
 
-class WorkerClient:
+async def dispatch_job(tool_id: str, user_id: str, tool=None,
+                        creds=None, cookies=None, proxy=None) -> dict:
+    """
+    Despacha job para extensão (preferencial) ou worker VNC (fallback).
+    Retorna {"job_id": str, "method": "extension"|"worker"|"unavailable"}.
+    """
+    job_id = str(uuid.uuid4())
 
-    def enqueue_open_tool(self, user_id: str, tool_id: str) -> str:
-        job_id = str(uuid.uuid4())
+    # Tentar extensão primeiro
+    try:
+        job_data = _build_job_data(tool_id, user_id, job_id, tool, creds, cookies, proxy)
+        sent = await send_job_to_extension(user_id, job_data)
+        if sent:
+            LOGGER.info(f"[WorkerClient] Job {job_id} → extensão Chrome")
+            return {"job_id": job_id, "method": "extension"}
+    except Exception as e:
+        LOGGER.warning(f"[WorkerClient] Extensão falhou: {e}")
 
-        # Caminho 1: Celery + Redis
-        if _redis_available():
-            try:
-                from workers.chrome_worker import open_tool_task
-                open_tool_task.apply_async(
-                    kwargs={
-                        "job_id": job_id,
-                        "user_id": user_id,
-                        "tool_id": tool_id,
-                    },
-                    task_id=job_id,
-                )
-                LOGGER.info(f"Job enfileirado via Celery: {job_id}")
-                return job_id
-            except Exception as e:
-                LOGGER.warning(f"Celery falhou ({e}), tentando HTTP")
+    # Fallback: worker VNC
+    sent = send_job_to_worker(job_id, user_id, tool_id)
+    if sent:
+        return {"job_id": job_id, "method": "worker"}
 
-        # Caminho 2: HTTP para container worker
-        if _call_worker_http(job_id, user_id, tool_id):
-            return job_id
-
-        # Sem worker disponivel — retornar job_id mesmo assim
-        # O WebSocket vai informar ao frontend que o worker nao esta disponivel
-        LOGGER.error(
-            f"Nenhum worker disponivel para job {job_id}. "
-            f"Configure Redis ou WORKER_URL no Easypanel."
-        )
-        return job_id
-
-
-worker_client = WorkerClient()
+    LOGGER.error(f"[WorkerClient] Nenhum destino disponível para job {job_id}")
+    return {"job_id": job_id, "method": "unavailable"}
