@@ -146,13 +146,9 @@ def delete_tool(tool_id: str, admin=Depends(require_admin)):
     return {"message": "Ferramenta removida"}
 
 
-@router.post("/{tool_id}/open")
-def open_tool(tool_id: str, user_id: str = Depends(get_current_user_id)):
-    """
-    Solicita abertura da ferramenta no worker de automação Chrome.
-    Retorna um job_id para acompanhar via WebSocket.
-    """
-    from services.worker_client import worker_client
 
-    job_id = worker_client.enqueue_open_tool(user_id=user_id, tool_id=tool_id)
-    return {"job_id": job_id, "status": "queued"}
+@router.post("/{tool_id}/open")
+async def open_tool(tool_id: str, user_id: str = Depends(get_current_user_id)):
+    from services.worker_client import dispatch_job
+    result = await dispatch_job(tool_id=tool_id, user_id=user_id)
+    return {"job_id": result["job_id"], "method": result["method"], "status": "queued"}
