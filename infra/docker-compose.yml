@@ -28,8 +28,13 @@ services:
 
   backend:
     build:
-      context: ../backend
-      dockerfile: Dockerfile
+      # Contexto = raiz do repositório (não ../backend): backend/Dockerfile
+      # usa caminhos de COPY relativos à raiz do repo, pensados pra bater
+      # com o jeito que o EasyPanel builda este monorepo em produção — ver
+      # o comentário no topo de ../backend/Dockerfile e
+      # ../docs/DEPLOY_EASYPANEL.md.
+      context: ..
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     env_file:
       - ../backend/.env

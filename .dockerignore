@@ -1,0 +1,16 @@
+# Contexto de build no EasyPanel é a raiz do repositório inteiro, mesmo
+# quando o Dockerfile usado está em backend/ ou frontend/ (ver
+# backend/Dockerfile, frontend/Dockerfile e docs/DEPLOY_EASYPANEL.md) —
+# este .dockerignore vale para os dois builds.
+.git
+
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+backend/.venv
+backend/.env
+backend/tests
+
+**/node_modules
+frontend/.next
+frontend/.env.local

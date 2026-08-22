@@ -20,6 +20,33 @@ navegador de cada usuário e só precisa ser apontada para as URLs públicas
 do backend/painel depois que eles estiverem no ar (ver "Extensão" no final
 deste guia).
 
+### Sobre este ser um monorepo (contexto de build)
+
+Este repositório tem `backend/` e `frontend/` lado a lado, não um repo por
+serviço. No EasyPanel, ao criar cada serviço, aponte o caminho do
+Dockerfile para `backend/Dockerfile` (ou `frontend/Dockerfile`) — **mas o
+contexto de build que o EasyPanel usa continua sendo a raiz do
+repositório inteiro**, não a subpasta (confirmado num build real: o
+comando `docker buildx build` executado pelo EasyPanel usa `-f
+.../code/backend/Dockerfile` só pra achar o Dockerfile, só que o
+diretório de contexto passado no final do comando é `.../code/`, a raiz).
+Por causa disso, os dois `Dockerfile`s deste repositório já foram escritos
+para funcionar com esse comportamento: todo `COPY` neles usa caminho
+começando com `backend/` ou `frontend/` (relativo à raiz do repo), não
+caminho relativo à própria pasta do Dockerfile. Há também um
+`.dockerignore` na **raiz** do repositório (não dentro de `backend/`
+nem `frontend/`) — é ali que ele precisa estar para valer, pelo mesmo
+motivo do contexto ser a raiz.
+
+Se no seu EasyPanel o "Build Path" do serviço tiver outro nome/campo (as
+telas mudam entre versões) e o comportamento acabar sendo diferente —
+contexto = a própria subpasta, não a raiz — o build vai falhar com um erro
+de `COPY ... not found` parecido com o de antes, só que ao contrário
+(procurando `backend/requirements.txt` dentro de um contexto que já é
+`backend/`). Se isso acontecer, é só remover o prefixo `backend/`/
+`frontend/` dos `COPY` nos Dockerfiles — mas comece pela configuração
+acima, que é a que se confirmou funcionando.
+
 ## 0. Antes do primeiro deploy: ajustar o schema do banco existente
 
 O banco do EasyPanel já tem o schema do app desktop, que é quase idêntico

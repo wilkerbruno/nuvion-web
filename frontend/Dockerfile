@@ -1,6 +1,12 @@
 # Build multi-stage do painel (Next.js) — pensado para deploy no EasyPanel
 # (ver ../docs/DEPLOY_EASYPANEL.md).
 #
+# Contexto de build = raiz do repositório inteiro (o EasyPanel, num
+# monorepo, aponta o Dockerfile pra `frontend/Dockerfile` mas passa o
+# CONTEXTO como a raiz do repo, não a subpasta — confirmado por um build
+# real). Por isso todo COPY abaixo é relativo à raiz do repo
+# (`frontend/...`), não à pasta onde este arquivo está.
+#
 # IMPORTANTE: NEXT_PUBLIC_API_URL é embutida no bundle JavaScript em tempo
 # de BUILD (Next.js troca process.env.NEXT_PUBLIC_* pelo valor literal
 # durante `next build`) — não é lida em tempo de execução como as outras
@@ -11,13 +17,13 @@
 
 FROM node:20-slim AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
 FROM node:20-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY frontend/ .
 
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
