@@ -1,0 +1,26 @@
+{
+  "name": "nuvion-web-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Painel de gestão do Nuvion Web — conta, dashboard (Fase 1); proxies, pagamentos, diamantes, IA nas próximas fases.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^14.2.35",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.5.4"
+  }
+}

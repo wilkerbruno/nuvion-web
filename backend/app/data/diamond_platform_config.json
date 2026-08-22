@@ -1,0 +1,33 @@
+{
+  "_comment": "Portado de diamond_platform_config.json do app desktop. O bloco pix_settings original (com access_token/app_id do Mercado Pago em texto puro) foi removido de propósito — essas credenciais já são geridas por PaymentConfig no banco (Fase 3, editável só por admin em /admin/payment-config); duplicá-las aqui como arquivo estático seria reintroduzir o mesmo problema de segredo versionado que a migração já corrigiu uma vez.",
+  "diamond_rate": 10,
+  "min_payment": 1.0,
+  "referral_reward": 50,
+  "signup_bonus": 20,
+  "rewards": [
+    {
+      "id": "1",
+      "icon": "🎨",
+      "title": "Tema Premium Dark",
+      "description": "Tema escuro elegante para sua interface",
+      "points": 100,
+      "available": true
+    },
+    {
+      "id": "2",
+      "icon": "🚀",
+      "title": "Turbo Mode",
+      "description": "Navegação 2x mais rápida com otimizações",
+      "points": 200,
+      "available": true
+    },
+    {
+      "id": "3",
+      "icon": "🛡️",
+      "title": "VPN Premium (1 mês)",
+      "description": "Proteção avançada e privacidade total",
+      "points": 300,
+      "available": true
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Nuvion Web",
+  "version": "0.3.0",
+  "description": "Extensão Nuvion Web — autenticação, proxy por usuário e anti-detecção para o painel em nuvion-web/frontend (ver docs/PLANO_MIGRACAO.md, seção 5).",
+  "minimum_chrome_version": "111",
+  "action": {
+    "default_popup": "src/popup/popup.html"
+  },
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "proxy",
+    "webRequest",
+    "webRequestAuthProvider",
+    "downloads"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/anti-fingerprint.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+# Ambiente local de desenvolvimento — Fase 0 do roadmap.
+#
+# Uso:
+#   cd nuvion-web
+#   cp backend/.env.example backend/.env   # preencha DB_USER/DB_PASSWORD/JWT_SECRET_KEY
+#   docker compose -f infra/docker-compose.yml up --build
+#
+# API sobe em http://localhost:8000 (docs em /docs), MySQL em localhost:3306.
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-nuvion}
+      MYSQL_USER: ${DB_USER:-nuvion}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-nuvion}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-nuvion_root}
+    ports:
+      - "3306:3306"
+    volumes:
+      - nuvion_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../backend/.env
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ../backend:/app
+
+volumes:
+  nuvion_mysql_data:
