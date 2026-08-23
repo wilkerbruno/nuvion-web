@@ -175,6 +175,15 @@ export const api = {
     return request("/browser-settings/me");
   },
 
+  // --- Fase 5: abrir ferramenta de IA já logada + roteada por proxy ---
+  async aiTools() {
+    return request("/ai-tools");
+  },
+
+  async launchTool(toolId) {
+    return request(`/ai-tools/${toolId}/launch`);
+  },
+
   // --- Fase 4: notificações + downloads ---
   async unreadNotificationCount() {
     return request("/notifications/me/unread-count");

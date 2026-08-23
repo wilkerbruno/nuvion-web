@@ -173,6 +173,53 @@
         font-size: 12px;
       }
 
+      .tools-list {
+        max-height: 220px;
+        overflow-y: auto;
+        margin-top: 6px;
+      }
+
+      .tool-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .tool-row:last-child {
+        border-bottom: none;
+      }
+
+      .tool-name {
+        font-size: 13px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tool-open-btn {
+        flex-shrink: 0;
+        padding: 5px 10px;
+        background: var(--accent);
+        color: #06231e;
+        border: none;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .tool-open-btn:hover {
+        background: var(--accent-strong);
+      }
+
+      .tool-open-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
       [hidden] {
         display: none !important;
       }
@@ -215,6 +262,12 @@
         </div>
         <div class="card">
           <div id="notifications-line" class="line muted">—</div>
+        </div>
+        <div class="card">
+          <div class="line muted">Ferramentas de IA</div>
+          <div id="tools-list" class="tools-list">
+            <div class="muted">Carregando...</div>
+          </div>
         </div>
         <button class="btn-link" type="button" data-open-dashboard>Abrir painel</button>
         <button id="logout-button" class="btn btn-secondary" type="button">Sair</button>

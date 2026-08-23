@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Nuvion Web",
-  "version": "0.3.0",
-  "description": "Extensão Nuvion Web — autenticação, proxy por usuário e anti-detecção para o painel em nuvion-web/frontend (ver docs/PLANO_MIGRACAO.md, seção 5).",
+  "version": "0.4.0",
+  "description": "Extensão Nuvion Web — autenticação, proxy por usuário e anti-detecção para o painel em nuvion-web/frontend, além de abrir ferramentas de IA já logadas e roteadas pelo proxy atribuído a cada uma (ver docs/PLANO_MIGRACAO.md, seção 5).",
   "minimum_chrome_version": "111",
   "action": {
     "default_popup": "src/popup/popup.html"
@@ -20,7 +20,9 @@
     "proxy",
     "webRequest",
     "webRequestAuthProvider",
-    "downloads"
+    "downloads",
+    "cookies",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"

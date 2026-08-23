@@ -58,7 +58,67 @@ async function renderStatus() {
     console.debug("[Nuvion] unreadNotificationCount falhou:", err);
   }
 
+  await renderTools();
+
   showView("status");
+}
+
+// Fase 5: lista de ferramentas de IA com um botão "Abrir" por linha — abre
+// já roteada pelo proxy atribuído pelo admin e já logada (cookie/senha),
+// tudo tratado pelo service worker via mensagem `nuvion:launch-tool`.
+async function renderTools() {
+  els.toolsList.textContent = "Carregando...";
+  try {
+    const tools = await api.aiTools();
+    if (!tools || tools.length === 0) {
+      els.toolsList.textContent = "Nenhuma ferramenta cadastrada ainda.";
+      return;
+    }
+    els.toolsList.innerHTML = "";
+    tools.forEach((tool) => {
+      const row = document.createElement("div");
+      row.className = "tool-row";
+
+      const name = document.createElement("div");
+      name.className = "tool-name";
+      name.textContent = tool.name;
+      name.title = tool.name;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tool-open-btn";
+      button.textContent = "Abrir";
+      button.addEventListener("click", () => handleOpenTool(tool, button));
+
+      row.appendChild(name);
+      row.appendChild(button);
+      els.toolsList.appendChild(row);
+    });
+  } catch (err) {
+    els.toolsList.textContent = "Não foi possível carregar as ferramentas.";
+    console.debug("[Nuvion] aiTools falhou:", err);
+  }
+}
+
+async function handleOpenTool(tool, button) {
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Abrindo...";
+  els.statusError.hidden = true;
+
+  try {
+    const response = await sendMessage({ type: "nuvion:launch-tool", toolId: tool.id });
+    if (!response || !response.ok) {
+      throw new Error((response && response.error) || "Falha ao abrir ferramenta");
+    }
+  } catch (err) {
+    els.statusError.textContent = `Falha ao abrir "${tool.name}": ${err.message || err}`;
+    els.statusError.hidden = false;
+    console.error("[Nuvion] Falha ao abrir ferramenta:", err);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
 }
 
 async function handleLogin(event) {
@@ -123,6 +183,7 @@ document.addEventListener("DOMContentLoaded", () => {
   els.accountLine = $("account-line");
   els.proxyLine = $("proxy-line");
   els.notificationsLine = $("notifications-line");
+  els.toolsList = $("tools-list");
   els.logoutButton = $("logout-button");
   els.reapplyButton = $("reapply-button");
   els.settingsButton = $("settings-button");

@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, require_admin
+from app.crud import ai_direct_credentials as credentials_crud
+from app.crud import ai_session_cookies as cookies_crud
 from app.crud import ai_tool as ai_tool_crud
 from app.crud import user_favorite as favorite_crud
 from app.db.session import get_db
@@ -21,6 +23,7 @@ from app.schemas.ai_tool import (
     AIToolUpdate,
     FavoriteToggleResponse,
 )
+from app.schemas.ai_tool_launch import AIToolLaunchResponse, LaunchCredentials, LaunchProxyInfo
 
 router = APIRouter(prefix="/ai-tools", tags=["ai-tools"])
 
@@ -69,6 +72,64 @@ def get_tool(
     tool = _get_or_404(db, tool_id)
     favorite_ids = set(favorite_crud.list_favorite_ids(db, current_user.id))
     return _to_public(tool, favorite_ids)
+
+
+@router.get("/{tool_id}/launch", response_model=AIToolLaunchResponse)
+def launch_tool(
+    tool_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Reúne tudo que a extensão precisa para abrir a ferramenta já logada
+    e já roteada pelo proxy configurado pelo admin: URL, método de login,
+    dados de conexão do proxy (se atribuído) e credenciais/cookies (se
+    configurados) — nessa ordem de preferência (cookies primeiro, já que é
+    o método principal combinado com o usuário; credenciais como reforço).
+
+    Liberado para qualquer usuário autenticado (não só admin) — é o próprio
+    usuário abrindo a ferramenta para uso normal, mesma lógica de `GET
+    /ai-tools` (leitura do catálogo é pública para quem está logado).
+    """
+    tool = _get_or_404(db, tool_id)
+
+    proxy_info = None
+    if tool.proxy is not None and tool.proxy.is_active:
+        proxy_info = LaunchProxyInfo(
+            host=tool.proxy.host,
+            port=tool.proxy.port,
+            proxy_type=tool.proxy.proxy_type,
+            username=tool.proxy.username,
+            password=tool.proxy.password,
+        )
+
+    cookies = None
+    cookie_session = cookies_crud.get_by_ai_tool(db, tool_id)
+    if cookie_session is not None and cookie_session.is_valid():
+        cookies = cookie_session.cookies_data
+
+    credentials = None
+    direct_credentials = credentials_crud.get_by_ai_tool(db, tool_id)
+    if direct_credentials is not None and direct_credentials.is_active:
+        decrypted = credentials_crud.get_decrypted_password(direct_credentials)
+        if decrypted is not None:
+            credentials = LaunchCredentials(
+                username=direct_credentials.username,
+                password=decrypted,
+                login_url=direct_credentials.login_url,
+                username_selector=direct_credentials.username_selector,
+                password_selector=direct_credentials.password_selector,
+                submit_selector=direct_credentials.submit_selector,
+            )
+
+    return AIToolLaunchResponse(
+        ai_tool_id=tool.id,
+        name=tool.name,
+        url=tool.url,
+        login_method=tool.get_active_login_method(),
+        proxy=proxy_info,
+        credentials=credentials,
+        cookies=cookies,
+    )
 
 
 @router.post("", response_model=AIToolPublic, status_code=status.HTTP_201_CREATED)
