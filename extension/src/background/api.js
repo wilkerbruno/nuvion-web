@@ -184,6 +184,24 @@ export const api = {
     return request(`/ai-tools/${toolId}/launch`);
   },
 
+  // --- Fase 5: favoritos de página por ferramenta (próprios da extensão,
+  // não os favoritos nativos do Chrome — ver app/models/tool_bookmark.py) ---
+  async listToolBookmarks(aiToolId) {
+    const query = aiToolId ? `?ai_tool_id=${encodeURIComponent(aiToolId)}` : "";
+    return request(`/tool-bookmarks${query}`);
+  },
+
+  async saveToolBookmark(aiToolId, url, title) {
+    return request("/tool-bookmarks", {
+      method: "POST",
+      body: { ai_tool_id: aiToolId, url, title },
+    });
+  },
+
+  async deleteToolBookmark(bookmarkId) {
+    return request(`/tool-bookmarks/${bookmarkId}`, { method: "DELETE" });
+  },
+
   // --- Fase 4: notificações + downloads ---
   async unreadNotificationCount() {
     return request("/notifications/me/unread-count");

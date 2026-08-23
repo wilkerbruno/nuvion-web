@@ -59,6 +59,7 @@ async function renderStatus() {
   }
 
   await renderTools();
+  await renderBookmarks();
 
   showView("status");
 }
@@ -129,6 +130,114 @@ async function handleOpenTool(tool, button) {
   }
 }
 
+// Fase 5: lista de páginas favoritadas dentro das ferramentas (salvas pelo
+// botão "★ Favoritar esta página" que a extensão injeta na janela da
+// ferramenta) — são favoritos próprios da extensão, não os favoritos
+// nativos do Chrome, então só aparecem aqui.
+async function renderBookmarks() {
+  els.bookmarksList.textContent = "Carregando...";
+  try {
+    const response = await sendMessage({ type: "nuvion:list-bookmarks" });
+    if (!response || !response.ok) {
+      throw new Error((response && response.error) || "Falha ao carregar favoritos");
+    }
+    const bookmarks = response.bookmarks || [];
+    if (bookmarks.length === 0) {
+      els.bookmarksList.textContent =
+        'Nenhuma página favoritada ainda — use o botão "★ Favoritar esta página" dentro de uma ferramenta.';
+      return;
+    }
+    els.bookmarksList.innerHTML = "";
+    bookmarks.forEach((bookmark) => {
+      const row = document.createElement("div");
+      row.className = "bookmark-row";
+
+      const info = document.createElement("div");
+      info.className = "bookmark-info";
+
+      const title = document.createElement("div");
+      title.className = "bookmark-title";
+      title.textContent = bookmark.title || bookmark.url;
+      title.title = bookmark.title || bookmark.url;
+
+      const toolLine = document.createElement("div");
+      toolLine.className = "bookmark-tool";
+      toolLine.textContent = bookmark.url;
+      toolLine.title = bookmark.url;
+
+      info.appendChild(title);
+      info.appendChild(toolLine);
+
+      const actions = document.createElement("div");
+      actions.className = "bookmark-actions";
+
+      const openButton = document.createElement("button");
+      openButton.type = "button";
+      openButton.className = "tool-open-btn";
+      openButton.textContent = "Abrir";
+      openButton.addEventListener("click", () => handleOpenBookmark(bookmark, openButton));
+
+      const removeButton = document.createElement("button");
+      removeButton.type = "button";
+      removeButton.className = "bookmark-remove-btn";
+      removeButton.textContent = "×";
+      removeButton.title = "Remover favorito";
+      removeButton.addEventListener("click", () => handleDeleteBookmark(bookmark, row));
+
+      actions.appendChild(openButton);
+      actions.appendChild(removeButton);
+
+      row.appendChild(info);
+      row.appendChild(actions);
+      els.bookmarksList.appendChild(row);
+    });
+  } catch (err) {
+    els.bookmarksList.textContent = "Não foi possível carregar os favoritos.";
+    console.debug("[Nuvion] list-bookmarks falhou:", err);
+  }
+}
+
+async function handleOpenBookmark(bookmark, button) {
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Abrindo...";
+  els.statusError.hidden = true;
+
+  try {
+    const response = await sendMessage({
+      type: "nuvion:launch-tool",
+      toolId: bookmark.ai_tool_id,
+      url: bookmark.url,
+    });
+    if (!response || !response.ok) {
+      throw new Error((response && response.error) || "Falha ao abrir favorito");
+    }
+  } catch (err) {
+    els.statusError.textContent = `Falha ao abrir favorito: ${err.message || err}`;
+    els.statusError.hidden = false;
+    console.error("[Nuvion] Falha ao abrir favorito:", err);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
+
+async function handleDeleteBookmark(bookmark, row) {
+  row.style.opacity = "0.5";
+  try {
+    const response = await sendMessage({ type: "nuvion:delete-bookmark", bookmarkId: bookmark.id });
+    if (!response || !response.ok) {
+      throw new Error((response && response.error) || "Falha ao remover favorito");
+    }
+    await renderBookmarks();
+  } catch (err) {
+    row.style.opacity = "1";
+    els.statusError.textContent = `Falha ao remover favorito: ${err.message || err}`;
+    els.statusError.hidden = false;
+    console.error("[Nuvion] Falha ao remover favorito:", err);
+  }
+}
+
 async function handleLogin(event) {
   event.preventDefault();
   els.loginError.hidden = true;
@@ -192,6 +301,7 @@ document.addEventListener("DOMContentLoaded", () => {
   els.proxyLine = $("proxy-line");
   els.notificationsLine = $("notifications-line");
   els.toolsList = $("tools-list");
+  els.bookmarksList = $("bookmarks-list");
   els.logoutButton = $("logout-button");
   els.reapplyButton = $("reapply-button");
   els.settingsButton = $("settings-button");

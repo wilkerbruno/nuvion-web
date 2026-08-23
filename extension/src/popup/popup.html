@@ -220,6 +220,61 @@
         cursor: not-allowed;
       }
 
+      .bookmark-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .bookmark-row:last-child {
+        border-bottom: none;
+      }
+
+      .bookmark-info {
+        overflow: hidden;
+        min-width: 0;
+      }
+
+      .bookmark-title {
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .bookmark-tool {
+        font-size: 11px;
+        color: var(--text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .bookmark-actions {
+        display: flex;
+        gap: 6px;
+        flex-shrink: 0;
+      }
+
+      .bookmark-remove-btn {
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        border-radius: 6px;
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .bookmark-remove-btn:hover {
+        color: var(--danger);
+        border-color: var(--danger);
+      }
+
       [hidden] {
         display: none !important;
       }
@@ -266,6 +321,12 @@
         <div class="card">
           <div class="line muted">Ferramentas de IA</div>
           <div id="tools-list" class="tools-list">
+            <div class="muted">Carregando...</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="line muted">★ Meus favoritos</div>
+          <div id="bookmarks-list" class="tools-list">
             <div class="muted">Carregando...</div>
           </div>
         </div>

@@ -20,6 +20,7 @@ from app.models.payment import Payment
 from app.models.payment_config import PaymentConfig
 from app.models.proxy import Proxy
 from app.models.reward import Reward
+from app.models.tool_bookmark import ToolBookmark
 from app.models.user import User
 from app.models.user_favorite import UserFavorite
 from app.models.user_session import UserSession
@@ -43,4 +44,5 @@ __all__ = [
     "Notification",
     "Expense",
     "Reward",
+    "ToolBookmark",
 ]

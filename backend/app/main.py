@@ -26,6 +26,7 @@ from app.api.routes import (
     payments,
     proxies,
     rewards,
+    tool_bookmarks,
     users,
 )
 from app.core.config import settings
@@ -96,6 +97,7 @@ app.include_router(admin_users.router)
 app.include_router(rewards.router)
 app.include_router(ai_tools.router)
 app.include_router(ai_tool_secrets.router)
+app.include_router(tool_bookmarks.router)
 app.include_router(notifications.router)
 app.include_router(notifications.admin_router)
 app.include_router(downloads.router)

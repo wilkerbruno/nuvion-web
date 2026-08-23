@@ -203,16 +203,23 @@ async function cookieStoreIdForTab(tabId) {
 // Sem essa permissão, `chrome.windows.create({ incognito: true })` falha e
 // caímos de volta numa janela comum (com o aviso claro pro usuário via
 // `isolated: false` no retorno de `launchTool`).
+//
+// `type: "popup"` em vez de "normal": os favoritos continuam sendo os
+// mesmos do perfil (o Chrome não separa favoritos entre modo normal e
+// anônimo — não tem como isolar isso, nem em janela anônima), mas uma
+// janela popup abre sem barra de favoritos, sem abas e sem o menu do
+// Chrome visível, então na prática some a poluição visual dos seus
+// favoritos pessoais em cima da ferramenta.
 async function openLaunchWindow(url) {
   try {
-    const win = await chrome.windows.create({ url, type: "normal", focused: true, incognito: true });
+    const win = await chrome.windows.create({ url, type: "popup", focused: true, incognito: true });
     return { window: win, isolated: true };
   } catch (err) {
     console.error(
       "[Nuvion] Não foi possível abrir em modo anônimo — verifique se 'Permitir em modo anônimo' está ativado para a extensão em chrome://extensions. Abrindo em janela comum como alternativa:",
       err
     );
-    const win = await chrome.windows.create({ url, type: "normal", focused: true });
+    const win = await chrome.windows.create({ url, type: "popup", focused: true });
     return { window: win, isolated: false };
   }
 }
@@ -241,6 +248,99 @@ function autofillLoginForm({ usernameSelector, passwordSelector, username, passw
   return { filled: Boolean(userEl && passEl) };
 }
 
+// --- Fase 5: favoritos de página PRÓPRIOS da extensão ---
+//
+// O Chrome não tem como isolar os favoritos NATIVOS por janela/ferramenta
+// (são sempre uma lista única por perfil, mesmo em modo anônimo — não tem
+// contorno pra isso, nem instalando como app). Em vez de tentar usar
+// chrome.bookmarks, a extensão injeta um botão próprio na página; ele
+// manda o que o usuário quiser salvar pro backend (`POST /tool-bookmarks`),
+// numa lista à parte, ligada à conta do usuário — não ao navegador.
+//
+// `activeLaunchTabs` guarda, por aba, qual ferramenta está aberta ali —
+// usado só pra saber quando reinjetar o botão (a ferramenta pode navegar
+// pra outras páginas com reload completo, o que apaga o botão anterior).
+const activeLaunchTabs = new Map(); // tabId -> { toolId, toolName }
+
+// Injetada via chrome.scripting.executeScript — precisa ser autocontida
+// (sem closures sobre variáveis do service worker), já que roda isolada no
+// contexto da aba de destino. Roda no mundo "ISOLATED" (padrão), então tem
+// acesso a chrome.runtime.sendMessage normalmente.
+function injectBookmarkWidget({ toolId, toolName }) {
+  const EXISTING_ID = "nuvion-bookmark-widget";
+  const existing = document.getElementById(EXISTING_ID);
+  if (existing) existing.remove(); // reinjeção após navegação — evita duplicar
+
+  const button = document.createElement("button");
+  button.id = EXISTING_ID;
+  button.type = "button";
+  button.textContent = "★ Favoritar esta página";
+  button.style.cssText = [
+    "position:fixed",
+    "bottom:16px",
+    "right:16px",
+    "z-index:2147483647",
+    "padding:9px 14px",
+    "background:#2fbfa6",
+    "color:#06231e",
+    "border:none",
+    "border-radius:20px",
+    "font:600 12px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
+    "cursor:pointer",
+    "box-shadow:0 2px 10px rgba(0,0,0,.35)",
+  ].join(";");
+
+  button.addEventListener("click", () => {
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = "Salvando...";
+    chrome.runtime.sendMessage(
+      {
+        type: "nuvion:save-bookmark",
+        toolId,
+        url: window.location.href,
+        title: document.title || toolName,
+      },
+      (response) => {
+        button.disabled = false;
+        button.textContent = response && response.ok ? "✓ Favoritado" : "Falha ao salvar";
+        setTimeout(() => {
+          button.textContent = original;
+        }, 2000);
+      }
+    );
+  });
+
+  document.body.appendChild(button);
+}
+
+async function injectBookmarkWidgetIntoTab(tabId, payload) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: injectBookmarkWidget,
+      args: [payload],
+    });
+  } catch (err) {
+    // Comum em páginas onde a extensão não pode injetar (chrome://,
+    // Chrome Web Store, etc.) — não é um erro que trave o resto do fluxo.
+    console.debug("[Nuvion] Não foi possível injetar o botão de favoritos nesta página:", err);
+  }
+}
+
+// Reinjeta o botão sempre que a aba rastreada termina de carregar uma nova
+// página (navegação com reload completo apaga o DOM anterior, inclusive o
+// botão). Navegação só de rota (SPA, sem reload) preserva o botão sozinha.
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status !== "complete") return;
+  const tracked = activeLaunchTabs.get(tabId);
+  if (tracked) injectBookmarkWidgetIntoTab(tabId, tracked);
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  activeLaunchTabs.delete(tabId);
+});
+
 function waitForTabComplete(tabId, timeoutMs = 15000) {
   return new Promise((resolve) => {
     let settled = false;
@@ -262,14 +362,15 @@ function waitForTabComplete(tabId, timeoutMs = 15000) {
   });
 }
 
-async function launchTool(toolId) {
+async function launchTool(toolId, { url: overrideUrl } = {}) {
   const launch = await api.launchTool(toolId);
+  const targetUrl = overrideUrl || launch.url; // overrideUrl = abrindo um favorito salvo, não a URL padrão da ferramenta
 
   if (launch.proxy) {
-    await registerToolProxy(new URL(launch.url).hostname, launch.proxy);
+    await registerToolProxy(new URL(targetUrl).hostname, launch.proxy);
   }
 
-  // Abre em branco primeiro (não já na URL da ferramenta): precisamos do
+  // Abre em branco primeiro (não já na URL de destino): precisamos do
   // storeId de cookies dessa aba/janela ANTES de navegar, senão a página
   // carrega antes do cookie de sessão existir e mostra a tela de login
   // mesmo com tudo certo (o usuário só veria funcionar depois de recarregar
@@ -284,33 +385,38 @@ async function launchTool(toolId) {
   let loginMethodUsed = "manual";
   if (launch.cookies && launch.cookies.length > 0) {
     const storeId = tab?.id ? await cookieStoreIdForTab(tab.id) : undefined;
-    const applied = await applyCookiesForTool(launch.url, launch.cookies, storeId);
+    const applied = await applyCookiesForTool(targetUrl, launch.cookies, storeId);
     if (applied > 0) loginMethodUsed = "cookies";
   }
 
   if (tab?.id) {
-    await chrome.tabs.update(tab.id, { url: launch.url });
+    activeLaunchTabs.set(tab.id, { toolId, toolName: launch.name });
+    await chrome.tabs.update(tab.id, { url: targetUrl });
   }
 
-  if (loginMethodUsed !== "cookies" && launch.credentials && tab?.id) {
+  if (tab?.id) {
     const loaded = await waitForTabComplete(tab.id);
     if (loaded) {
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: autofillLoginForm,
-          args: [
-            {
-              usernameSelector: launch.credentials.username_selector,
-              passwordSelector: launch.credentials.password_selector,
-              username: launch.credentials.username,
-              password: launch.credentials.password,
-            },
-          ],
-        });
-        loginMethodUsed = "credentials";
-      } catch (err) {
-        console.error("[Nuvion] Falha ao preencher formulário de login:", err);
+      await injectBookmarkWidgetIntoTab(tab.id, { toolId, toolName: launch.name });
+
+      if (loginMethodUsed !== "cookies" && launch.credentials) {
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: autofillLoginForm,
+            args: [
+              {
+                usernameSelector: launch.credentials.username_selector,
+                passwordSelector: launch.credentials.password_selector,
+                username: launch.credentials.username,
+                password: launch.credentials.password,
+              },
+            ],
+          });
+          loginMethodUsed = "credentials";
+        } catch (err) {
+          console.error("[Nuvion] Falha ao preencher formulário de login:", err);
+        }
       }
     }
   }
@@ -354,7 +460,19 @@ async function handleMessage(message) {
       return { ok: true };
     }
     case "nuvion:launch-tool": {
-      return launchTool(message.toolId);
+      return launchTool(message.toolId, { url: message.url });
+    }
+    case "nuvion:save-bookmark": {
+      const bookmark = await api.saveToolBookmark(message.toolId, message.url, message.title);
+      return { ok: true, bookmark };
+    }
+    case "nuvion:list-bookmarks": {
+      const bookmarks = await api.listToolBookmarks();
+      return { ok: true, bookmarks };
+    }
+    case "nuvion:delete-bookmark": {
+      await api.deleteToolBookmark(message.bookmarkId);
+      return { ok: true };
     }
     default:
       return { ok: false, error: `Mensagem desconhecida: ${message?.type}` };

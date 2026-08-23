@@ -53,3 +53,6 @@ User.notifications = relationship(
 User.created_notifications = relationship(
     "Notification", foreign_keys="[Notification.created_by_admin_id]", back_populates="created_by"
 )
+
+User.tool_bookmarks = relationship("ToolBookmark", back_populates="user", cascade="all, delete-orphan")
+AITool.tool_bookmarks = relationship("ToolBookmark", back_populates="ai_tool", cascade="all, delete-orphan")
