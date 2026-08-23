@@ -111,6 +111,14 @@ async function handleOpenTool(tool, button) {
     if (!response || !response.ok) {
       throw new Error((response && response.error) || "Falha ao abrir ferramenta");
     }
+    if (response.isolated === false) {
+      // A extensão não conseguiu abrir em modo anônimo (o Chrome exige que
+      // o usuário libere isso manualmente) — a ferramenta abriu, mas numa
+      // janela comum, que compartilha login com as outras abas do usuário.
+      els.statusError.textContent =
+        'Ferramenta aberta, mas sem isolamento de conta: ative "Permitir em modo anônimo" para a extensão Nuvion Web em chrome://extensions para abrir sempre com a conta certa.';
+      els.statusError.hidden = false;
+    }
   } catch (err) {
     els.statusError.textContent = `Falha ao abrir "${tool.name}": ${err.message || err}`;
     els.statusError.hidden = false;

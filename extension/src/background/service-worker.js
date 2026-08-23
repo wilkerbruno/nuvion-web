@@ -144,7 +144,7 @@ function sameSiteForChrome(value) {
   return "unspecified";
 }
 
-async function applyCookiesForTool(toolUrl, cookies) {
+async function applyCookiesForTool(toolUrl, cookies, storeId) {
   let applied = 0;
   const fallbackDomain = new URL(toolUrl).hostname;
 
@@ -162,6 +162,10 @@ async function applyCookiesForTool(toolUrl, cookies) {
     };
     if (cookie.domain) details.domain = cookie.domain;
     if (typeof cookie.expirationDate === "number") details.expirationDate = cookie.expirationDate;
+    // Sem isso o cookie vai pro cookie store "normal" (perfil comum do
+    // usuário) mesmo quando a aba de destino é anônima — cada modo tem seu
+    // próprio armazenamento de cookies, ver `cookieStoreIdForTab` abaixo.
+    if (storeId) details.storeId = storeId;
 
     try {
       await chrome.cookies.set(details);
@@ -171,6 +175,46 @@ async function applyCookiesForTool(toolUrl, cookies) {
     }
   }
   return applied;
+}
+
+async function cookieStoreIdForTab(tabId) {
+  try {
+    const stores = await chrome.cookies.getAllCookieStores();
+    const match = stores.find((store) => store.tabIds.includes(tabId));
+    return match ? match.id : undefined;
+  } catch (err) {
+    console.error("[Nuvion] Falha ao localizar o cookie store da aba:", err);
+    return undefined;
+  }
+}
+
+// Abre a ferramenta numa janela ANÔNIMA (incógnito) em vez de uma janela
+// comum. Isso é essencial: uma janela "normal" nova compartilha os mesmos
+// cookies/sessões de todas as outras janelas do mesmo perfil do Chrome —
+// então ela sempre abriria logada com a conta pessoal do usuário (se ele já
+// estivesse logado naquele site em outra aba), nunca com a conta que o
+// admin configurou nem "deslogada" quando nada foi configurado. Uma janela
+// anônima começa sem nenhum cookie, então só fica logada com o que a
+// extensão injetar de propósito (ver `applyCookiesForTool`).
+//
+// Isso só funciona se o usuário tiver liberado "Permitir em modo anônimo"
+// pra esta extensão em chrome://extensions (o Chrome bloqueia isso por
+// padrão, por privacidade — nenhuma extensão consegue ligar isso sozinha).
+// Sem essa permissão, `chrome.windows.create({ incognito: true })` falha e
+// caímos de volta numa janela comum (com o aviso claro pro usuário via
+// `isolated: false` no retorno de `launchTool`).
+async function openLaunchWindow(url) {
+  try {
+    const win = await chrome.windows.create({ url, type: "normal", focused: true, incognito: true });
+    return { window: win, isolated: true };
+  } catch (err) {
+    console.error(
+      "[Nuvion] Não foi possível abrir em modo anônimo — verifique se 'Permitir em modo anônimo' está ativado para a extensão em chrome://extensions. Abrindo em janela comum como alternativa:",
+      err
+    );
+    const win = await chrome.windows.create({ url, type: "normal", focused: true });
+    return { window: win, isolated: false };
+  }
 }
 
 // Injetada via chrome.scripting.executeScript — precisa ser autocontida
@@ -225,17 +269,27 @@ async function launchTool(toolId) {
     await registerToolProxy(new URL(launch.url).hostname, launch.proxy);
   }
 
-  let loginMethodUsed = "manual";
-  if (launch.cookies && launch.cookies.length > 0) {
-    const applied = await applyCookiesForTool(launch.url, launch.cookies);
-    if (applied > 0) loginMethodUsed = "cookies";
-  }
-
-  const win = await chrome.windows.create({ url: launch.url, type: "normal", focused: true });
+  // Abre em branco primeiro (não já na URL da ferramenta): precisamos do
+  // storeId de cookies dessa aba/janela ANTES de navegar, senão a página
+  // carrega antes do cookie de sessão existir e mostra a tela de login
+  // mesmo com tudo certo (o usuário só veria funcionar depois de recarregar
+  // manualmente). Só navega pra URL de verdade depois do cookie aplicado.
+  const { window: win, isolated } = await openLaunchWindow("about:blank");
   let tab = win.tabs && win.tabs[0] ? win.tabs[0] : null;
   if (!tab) {
     const tabs = await chrome.tabs.query({ windowId: win.id });
     tab = tabs[0] || null;
+  }
+
+  let loginMethodUsed = "manual";
+  if (launch.cookies && launch.cookies.length > 0) {
+    const storeId = tab?.id ? await cookieStoreIdForTab(tab.id) : undefined;
+    const applied = await applyCookiesForTool(launch.url, launch.cookies, storeId);
+    if (applied > 0) loginMethodUsed = "cookies";
+  }
+
+  if (tab?.id) {
+    await chrome.tabs.update(tab.id, { url: launch.url });
   }
 
   if (loginMethodUsed !== "cookies" && launch.credentials && tab?.id) {
@@ -266,6 +320,7 @@ async function launchTool(toolId) {
     opened: true,
     loginMethod: loginMethodUsed,
     proxyApplied: Boolean(launch.proxy),
+    isolated,
   };
 }
 
