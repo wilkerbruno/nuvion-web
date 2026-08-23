@@ -13,10 +13,10 @@ a senha de app SMTP que estavam expostas no repositório desktop.
 """
 import json
 from functools import lru_cache
-from typing import List, Union
+from typing import Annotated, List, Union
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -49,24 +49,29 @@ class Settings(BaseSettings):
 
     # --- CORS: origem do painel web + ID da extensão publicada ---
     # Nunca usar "*" aqui — o sistema lida com pagamento e proxy de usuários.
-    CORS_ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
+    #
+    # `Annotated[..., NoDecode]` é essencial aqui, não só decoração: sem
+    # ele, o pydantic-settings tenta fazer `json.loads` no valor bruto da
+    # variável de ambiente ANTES de chamar qualquer @field_validator nosso
+    # — e se não for um JSON válido, ele já derruba a aplicação inteira lá
+    # (`SettingsError` na própria fonte, `EnvSettingsSource`), sem nunca
+    # chegar no validador abaixo. `NoDecode` desliga esse pré-parse
+    # automático e entrega a string bruta pro nosso validador tratar.
+    CORS_ALLOWED_ORIGINS: Annotated[List[str], NoDecode] = ["http://localhost:3000"]
     EXTENSION_ID: str = ""  # preenchido quando a extensão for publicada
 
     @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
     @classmethod
     def _parse_cors_allowed_origins(cls, value: Union[str, List[str], None]):
-        """Pydantic, por padrão, só aceita este campo (List[str]) via
-        variável de ambiente se o valor for um JSON válido (ex.:
-        `["https://app.exemplo.com"]`), com aspas duplas certinhas. Em
-        painéis como o EasyPanel, digitar JSON válido numa caixa de texto
-        de variável de ambiente é uma fonte comum de erro (aspas erradas,
-        colchete esquecido, etc. — cada erro derruba o backend inteiro na
-        inicialização). Por isso aceitamos também uma lista simples
-        separada por vírgula (`https://a.com,https://b.com`), sem exigir
-        JSON. Se vier algo que já parece JSON (começa com `[`), tentamos
-        JSON primeiro; se falhar, caímos pro parse por vírgula mesmo
-        assim, em vez de derrubar a aplicação por causa de uma aspa
-        errada.
+        """Aceita tanto JSON (`["https://app.exemplo.com"]`) quanto uma URL
+        simples (`https://app.exemplo.com`) ou uma lista separada por
+        vírgula (`https://a.com,https://b.com`) — não exige JSON válido.
+        Em painéis como o EasyPanel, digitar JSON válido numa caixa de
+        texto de variável de ambiente é uma fonte comum de erro (aspas
+        erradas, colchete esquecido etc.), e cada erro aqui antes derrubava
+        o backend inteiro na inicialização. Se vier algo que já parece JSON
+        (começa com `[`), tentamos JSON primeiro; se falhar, caímos pro
+        parse por vírgula mesmo assim, em vez de recusar subir.
         """
         if value is None or isinstance(value, list):
             return value
