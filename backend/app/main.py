@@ -70,6 +70,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def root():
+    """Sem isso, `GET /` cai em 404 — inofensivo pra quem usa a API direto
+    (ninguém chama `/`), mas plataformas como o EasyPanel costumam checar a
+    saúde do serviço batendo na raiz `/` por padrão, quando nenhum caminho
+    de health check é configurado explicitamente. Um 404 ali pode ser lido
+    como "serviço não saudável" e disparar reinícios repetidos do container
+    mesmo com a API funcionando normalmente — ver `/health` para o check
+    real (com status do banco)."""
+    return {"service": settings.APP_NAME, "status": "ok", "docs": "/docs", "health": "/health"}
+
+
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(users.router)
