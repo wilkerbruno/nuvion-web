@@ -11,10 +11,11 @@ default; a aplicação recusa subir sem elas configuradas via ambiente/.env
 Ação recomendada em paralelo a esta migração: rotacionar a senha do MySQL e
 a senha de app SMTP que estavam expostas no repositório desktop.
 """
+import json
 from functools import lru_cache
-from typing import List
+from typing import List, Union
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -50,6 +51,47 @@ class Settings(BaseSettings):
     # Nunca usar "*" aqui — o sistema lida com pagamento e proxy de usuários.
     CORS_ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
     EXTENSION_ID: str = ""  # preenchido quando a extensão for publicada
+
+    @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def _parse_cors_allowed_origins(cls, value: Union[str, List[str], None]):
+        """Pydantic, por padrão, só aceita este campo (List[str]) via
+        variável de ambiente se o valor for um JSON válido (ex.:
+        `["https://app.exemplo.com"]`), com aspas duplas certinhas. Em
+        painéis como o EasyPanel, digitar JSON válido numa caixa de texto
+        de variável de ambiente é uma fonte comum de erro (aspas erradas,
+        colchete esquecido, etc. — cada erro derruba o backend inteiro na
+        inicialização). Por isso aceitamos também uma lista simples
+        separada por vírgula (`https://a.com,https://b.com`), sem exigir
+        JSON. Se vier algo que já parece JSON (começa com `[`), tentamos
+        JSON primeiro; se falhar, caímos pro parse por vírgula mesmo
+        assim, em vez de derrubar a aplicação por causa de uma aspa
+        errada.
+        """
+        if value is None or isinstance(value, list):
+            return value
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if not text:
+            return []
+        if text.startswith("["):
+            try:
+                parsed = json.loads(text)
+            except (json.JSONDecodeError, ValueError):
+                # JSON quase certo mas malformado (ex.: aspas simples em vez
+                # de duplas) — tira os colchetes e cai pro parse por vírgula
+                # abaixo, em vez de tratar o texto inteiro como uma origem só.
+                if text.endswith("]"):
+                    text = text[1:-1]
+            else:
+                if isinstance(parsed, list):
+                    return [str(item).strip() for item in parsed if str(item).strip()]
+        return [
+            origin.strip().strip("'\"")
+            for origin in text.split(",")
+            if origin.strip().strip("'\"")
+        ]
 
     # --- Mercado Pago / PIX (sem defaults — segredo fica só em ambiente) ---
     # Na prática, quem manda são as credenciais guardadas em PaymentConfig
