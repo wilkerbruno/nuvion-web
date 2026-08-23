@@ -317,6 +317,15 @@ export interface DirectCredentialsSetPayload {
   submit_selector?: string;
 }
 
+// --- Administração de usuários (definir plano, bloquear/desbloquear) ---
+
+export type UserStatus = "Ativo" | "Inativo" | "Cancelado" | "Bloqueado";
+
+export interface AdminUserUpdatePayload {
+  category?: PlanCategory;
+  status?: UserStatus;
+}
+
 export interface CookieSessionSummary {
   configured: boolean;
   id?: string | null;
@@ -488,6 +497,21 @@ export const api = {
 
   deleteReward: (rewardId: string) =>
     request<void>(`/admin/rewards/${rewardId}`, { method: "DELETE", auth: true }),
+
+  // --- Usuários — admin (definir plano, bloquear/desbloquear) ---
+  adminUsers: (search?: string) =>
+    request<UserPublic[]>(`/admin/users${search ? `?search=${encodeURIComponent(search)}` : ""}`, {
+      auth: true,
+    }),
+
+  adminUser: (userId: string) => request<UserPublic>(`/admin/users/${userId}`, { auth: true }),
+
+  updateAdminUser: (userId: string, payload: AdminUserUpdatePayload) =>
+    request<UserPublic>(`/admin/users/${userId}`, {
+      method: "PATCH",
+      auth: true,
+      body: JSON.stringify(payload),
+    }),
 
   // --- Notificações ---
   myNotifications: (includeRead = false) =>

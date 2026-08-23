@@ -45,9 +45,9 @@ export default function AdminHubPage() {
           <div className="brand">
             Nuvion<span>Web</span>
           </div>
-          <button className="btn-link" onClick={handleLogout}>
-            Sair
-          </button>
+          <Link className="btn-link" href="/dashboard">
+            ← Voltar ao painel
+          </Link>
         </div>
 
         <div className="subtitle">Área administrativa</div>
@@ -56,7 +56,19 @@ export default function AdminHubPage() {
           <Link href="/dashboard">Painel</Link>
         </nav>
 
+        <button className="btn-link" onClick={handleLogout} style={{ marginBottom: 20 }}>
+          Sair
+        </button>
+
         <div className="tool-grid">
+          <Link href="/admin/users" className="tool-card" style={{ textDecoration: "none" }}>
+            <div className="icon">👤</div>
+            <div className="name">Usuários</div>
+            <div className="desc">
+              Definir o plano (Standard/Premium/VIP) de qualquer conta e bloquear/desbloquear o
+              acesso.
+            </div>
+          </Link>
           <Link href="/admin/ai-tools" className="tool-card" style={{ textDecoration: "none" }}>
             <div className="icon">🛠️</div>
             <div className="name">Ferramentas de IA</div>
@@ -73,13 +85,6 @@ export default function AdminHubPage() {
               diamantes.
             </div>
           </Link>
-        </div>
-
-        <div className="foot-link">
-          Definir o plano (Standard/Premium/VIP) de um usuário ainda não tem rota nem tela própria
-          nesta versão — hoje o plano só muda quando o próprio usuário paga (ou por acesso direto
-          ao banco). Uma tela de administração de usuários (trocar plano, bloquear conta) pode
-          entrar numa próxima iteração.
         </div>
       </div>
     </div>

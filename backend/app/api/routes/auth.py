@@ -8,7 +8,7 @@ manter o usuário "logado" na memória do processo.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_active_user
 from app.core.security import create_access_token, create_refresh_token, decode_token
 from app.crud import user as user_crud
 from app.db.session import get_db
@@ -65,5 +65,12 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserPublic)
-def me(current_user=Depends(get_current_user)):
+def me(current_user=Depends(get_current_active_user)):
+    # Antes usava get_current_user (só decodifica o JWT, sem checar
+    # status/bloqueio) — inconsistente com o resto da API, que usa
+    # get_current_active_user (ver app/api/deps.py). Na prática isso
+    # deixava um usuário bloqueado/cancelado continuar lendo o próprio
+    # perfil com um token ainda válido, mesmo sem conseguir usar nenhuma
+    # outra rota real. Trocado pra fechar essa brecha, especialmente agora
+    # que existe /admin/users pra bloquear conta em tempo real.
     return current_user

@@ -185,3 +185,30 @@ def update_profile(db: Session, user: User, **fields) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+# --- Administração de usuários (definir plano, bloquear/desbloquear) ---
+
+
+def list_users(db: Session, search: Optional[str] = None, limit: int = 300) -> "list[User]":
+    """Lista usuários para a área administrativa. `search` casa por
+    username, email ou nome (case-insensitive, substring)."""
+    query = db.query(User)
+    if search and search.strip():
+        like = f"%{search.strip()}%"
+        query = query.filter(
+            or_(User.username.ilike(like), User.email.ilike(like), User.name.ilike(like))
+        )
+    return query.order_by(User.created_at.desc()).limit(limit).all()
+
+
+def update_admin_fields(db: Session, user: User, **fields) -> User:
+    """Atualização administrativa (plano/status) — mesmo padrão de
+    `update_profile`, mas usada só pelas rotas `/admin/users` (ver
+    app/api/deps.py::require_admin)."""
+    for key, value in fields.items():
+        if value is not None and hasattr(user, key):
+            setattr(user, key, value)
+    db.commit()
+    db.refresh(user)
+    return user

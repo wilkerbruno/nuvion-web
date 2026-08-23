@@ -14,6 +14,7 @@ from app.api.routes import (
     admin_payment_config,
     admin_proxies,
     admin_rewards,
+    admin_users,
     ai_tool_secrets,
     ai_tools,
     auth,
@@ -79,6 +80,7 @@ app.include_router(payments.router)
 app.include_router(admin_payment_config.router)
 app.include_router(admin_proxies.router)
 app.include_router(admin_rewards.router)
+app.include_router(admin_users.router)
 app.include_router(rewards.router)
 app.include_router(ai_tools.router)
 app.include_router(ai_tool_secrets.router)
