@@ -70,3 +70,21 @@ def test_cors_empty_string_is_empty_list(monkeypatch):
 def test_cors_default_is_localhost_only(monkeypatch):
     settings = _settings_from_env(monkeypatch)
     assert settings.CORS_ALLOWED_ORIGINS == ["http://localhost:3000"]
+
+
+def test_cors_strips_path_from_full_url(monkeypatch):
+    # Erro comum: colar a URL da tela de login inteira em vez de só a
+    # origem — CORS nunca deveria comparar caminho.
+    settings = _settings_from_env(monkeypatch, "https://app.exemplo.com/login")
+    assert settings.CORS_ALLOWED_ORIGINS == ["https://app.exemplo.com"]
+
+
+def test_cors_recovers_from_unterminated_json_with_path(monkeypatch):
+    # Caso real que aconteceu em produção: JSON sem fechar (faltou `"]`)
+    # E a URL colada tinha `/login` no final.
+    settings = _settings_from_env(
+        monkeypatch, '["https://banco-de-dados-nuvion-frontend.lcgx8u.easypanel.host/login'
+    )
+    assert settings.CORS_ALLOWED_ORIGINS == [
+        "https://banco-de-dados-nuvion-frontend.lcgx8u.easypanel.host"
+    ]

@@ -325,6 +325,13 @@ export default function PaymentsPage() {
     );
   }
 
+  // Só Admins podem escolher/mudar o plano por aqui — para o usuário comum,
+  // o plano é definido pelo admin (área de administração) e esta tela serve
+  // só para pagar/renovar o plano que ele já tem, no valor correspondente.
+  // Trocar de plano deixando o usuário escolher livremente aqui contradiz
+  // essa regra, então o plano de checkout fica travado em `user.category`.
+  const isAdmin = user.account_type === "Admin";
+  const currentPlan = (user.category as PlanCategory) ?? "Standard";
   const usdtPrice = prices.usdt[selectedPlan];
   const usdtAvailable = usdtPrice !== null && usdtPrice > 0;
 
@@ -344,23 +351,44 @@ export default function PaymentsPage() {
           Plano atual: {user.category} — {user.status}
         </div>
 
-        <div className="section-title">Escolha o plano</div>
-        <div className="plan-grid">
-          {PLAN_ORDER.map((plan) => (
-            <button
-              key={plan}
-              type="button"
-              className={`plan-card${selectedPlan === plan ? " plan-card--selected" : ""}`}
-              onClick={() => setSelectedPlan(plan)}
-            >
-              <div className="name">{plan}</div>
-              <div className="price">{formatCurrency(prices.brl[plan])}</div>
-              {prices.usdt[plan] !== null && (
-                <div className="price-usdt">≈ {formatUsdt(prices.usdt[plan] as number)}</div>
-              )}
-            </button>
-          ))}
-        </div>
+        {isAdmin ? (
+          <>
+            <div className="section-title">Escolha o plano</div>
+            <div className="plan-grid">
+              {PLAN_ORDER.map((plan) => (
+                <button
+                  key={plan}
+                  type="button"
+                  className={`plan-card${selectedPlan === plan ? " plan-card--selected" : ""}`}
+                  onClick={() => setSelectedPlan(plan)}
+                >
+                  <div className="name">{plan}</div>
+                  <div className="price">{formatCurrency(prices.brl[plan])}</div>
+                  {prices.usdt[plan] !== null && (
+                    <div className="price-usdt">≈ {formatUsdt(prices.usdt[plan] as number)}</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="section-title">Sua assinatura</div>
+            <div className="plan-grid">
+              <div className="plan-card plan-card--selected plan-card--readonly">
+                <div className="name">{currentPlan}</div>
+                <div className="price">{formatCurrency(prices.brl[currentPlan])}</div>
+                {prices.usdt[currentPlan] !== null && (
+                  <div className="price-usdt">≈ {formatUsdt(prices.usdt[currentPlan] as number)}</div>
+                )}
+              </div>
+            </div>
+            <div className="subtitle">
+              O plano é definido por um administrador. Esta tela é só para pagar/renovar sua
+              assinatura no valor acima.
+            </div>
+          </>
+        )}
 
         <div className="section-title">Forma de pagamento</div>
         <div className="method-toggle">

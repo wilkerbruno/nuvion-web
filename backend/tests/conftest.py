@@ -48,6 +48,19 @@ def db_session():
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
 
+    # Semeia o catálogo de recompensas (tabela nova, ver
+    # app/models/reward.py) — mesma chamada que scripts/sync_schema_live.py
+    # faz em produção logo depois de criar a tabela pela primeira vez, para
+    # que os testes de /rewards continuem vendo um catálogo não-vazio sem
+    # precisar conhecer detalhes de reward_service.
+    from app.services.reward_service import seed_default_rewards
+
+    _seed_db = TestingSessionLocal()
+    try:
+        seed_default_rewards(_seed_db)
+    finally:
+        _seed_db.close()
+
     def _override_get_db():
         db = TestingSessionLocal()
         try:

@@ -12,10 +12,6 @@ export default function AIToolsPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newTool, setNewTool] = useState({ name: "", url: "", category: "", description: "" });
-  const [saving, setSaving] = useState(false);
 
   function loadTools() {
     api
@@ -57,37 +53,6 @@ export default function AIToolsPage() {
     }
   }
 
-  async function handleCreateTool(event: React.FormEvent) {
-    event.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      await api.createAITool({
-        name: newTool.name,
-        url: newTool.url,
-        category: newTool.category || undefined,
-        description: newTool.description || undefined,
-      });
-      setNewTool({ name: "", url: "", category: "", description: "" });
-      setShowAddForm(false);
-      setNotice("Ferramenta adicionada ao catálogo.");
-      loadTools();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Erro ao criar ferramenta.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDeleteTool(toolId: string) {
-    try {
-      await api.deleteAITool(toolId);
-      loadTools();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Erro ao remover ferramenta.");
-    }
-  }
-
   const isAdmin = user?.account_type === "Admin";
 
   return (
@@ -107,12 +72,19 @@ export default function AIToolsPage() {
           <Link href="/rewards">Diamantes</Link>
           <Link href="/notifications">Notificações</Link>
           <Link href="/downloads">Downloads</Link>
+          {isAdmin && <Link href="/admin">Área administrativa</Link>}
         </nav>
 
         <div className="subtitle">Ferramentas de IA</div>
 
         {error && <div className="error">{error}</div>}
-        {notice && <div className="success-box">{notice}</div>}
+
+        {isAdmin && (
+          <div className="subtitle">
+            Para adicionar, editar ou remover ferramentas do catálogo, use a{" "}
+            <Link href="/admin/ai-tools">área administrativa</Link>.
+          </div>
+        )}
 
         <div className="filter-row">
           <input
@@ -129,48 +101,6 @@ export default function AIToolsPage() {
             style={{ maxWidth: 180 }}
           />
         </div>
-
-        {isAdmin && (
-          <>
-            <button className="btn-secondary" onClick={() => setShowAddForm((v) => !v)}>
-              {showAddForm ? "Cancelar" : "+ Adicionar ferramenta ao catálogo"}
-            </button>
-
-            {showAddForm && (
-              <form className="inline-form" onSubmit={handleCreateTool}>
-                <input
-                  className="input"
-                  placeholder="Nome"
-                  required
-                  value={newTool.name}
-                  onChange={(e) => setNewTool({ ...newTool, name: e.target.value })}
-                />
-                <input
-                  className="input"
-                  placeholder="URL"
-                  required
-                  value={newTool.url}
-                  onChange={(e) => setNewTool({ ...newTool, url: e.target.value })}
-                />
-                <input
-                  className="input"
-                  placeholder="Categoria"
-                  value={newTool.category}
-                  onChange={(e) => setNewTool({ ...newTool, category: e.target.value })}
-                />
-                <input
-                  className="input"
-                  placeholder="Descrição"
-                  value={newTool.description}
-                  onChange={(e) => setNewTool({ ...newTool, description: e.target.value })}
-                />
-                <button className="btn" type="submit" disabled={saving}>
-                  {saving ? "Salvando..." : "Salvar"}
-                </button>
-              </form>
-            )}
-          </>
-        )}
 
         {!tools ? (
           <div className="subtitle">Carregando...</div>
@@ -207,26 +137,10 @@ export default function AIToolsPage() {
                 >
                   Abrir
                 </a>
-                {isAdmin && (
-                  <button
-                    className="btn-link"
-                    style={{ marginTop: 8, color: "var(--danger)" }}
-                    onClick={() => handleDeleteTool(tool.id)}
-                  >
-                    Remover do catálogo
-                  </button>
-                )}
               </div>
             ))}
           </div>
         )}
-
-        <div className="foot-link">
-          Credenciais diretas e cookies de sessão por ferramenta ficam disponíveis via API
-          (/ai-tools/&#123;id&#125;/credentials, /cookies) — a UI de administração deles chega numa
-          próxima iteração; login automático de verdade ainda não existe na versão web (ver
-          backend/README.md).
-        </div>
       </div>
     </div>
   );

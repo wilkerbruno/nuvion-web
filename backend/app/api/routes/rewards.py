@@ -2,7 +2,8 @@
 
 Diamantes são ganhos por indicação (`app/crud/user.py::register_user`
 chama `reward_service.process_referral_rewards` no cadastro) e trocados por
-recompensas do catálogo estático (`app/data/diamond_platform_config.json`).
+recompensas do catálogo, gerido por admin via `/admin/rewards` (tabela
+`rewards` — ver app/models/reward.py; deixou de ser um JSON estático).
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -29,11 +30,14 @@ def my_rewards(current_user: User = Depends(get_current_active_user)):
 
 
 @router.get("/catalog", response_model=list[RewardCatalogItem])
-def catalog(current_user: User = Depends(get_current_active_user)):
+def catalog(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
     claimed = set(reward_service.get_claimed_rewards(current_user))
     return [
         RewardCatalogItem(**reward, already_claimed=reward["id"] in claimed)
-        for reward in reward_service.get_rewards_catalog()
+        for reward in reward_service.get_rewards_catalog(db)
     ]
 
 

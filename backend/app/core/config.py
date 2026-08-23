@@ -14,6 +14,7 @@ a senha de app SMTP que estavam expostas no repositório desktop.
 import json
 from functools import lru_cache
 from typing import Annotated, List, Union
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -60,6 +61,23 @@ class Settings(BaseSettings):
     CORS_ALLOWED_ORIGINS: Annotated[List[str], NoDecode] = ["http://localhost:3000"]
     EXTENSION_ID: str = ""  # preenchido quando a extensão for publicada
 
+    @staticmethod
+    def _clean_origin(raw: str) -> str:
+        """Normaliza um item bruto até virar só `esquema://host[:porta]` —
+        o formato que o navegador manda no header `Origin` e que o CORS
+        precisa bater exatamente. Tira aspas e colchetes soltos (sobra
+        comum de JSON malformado, mesmo sem par — ex.: `["https://a.com`
+        sem fechar) e, se o valor for uma URL com caminho (ex.: alguém
+        colou a URL da tela de login inteira, `.../login`), descarta tudo
+        depois do host — CORS nunca deveria comparar caminho."""
+        text = raw.strip().strip("[]").strip().strip("'\"").strip()
+        if not text:
+            return ""
+        parts = urlsplit(text)
+        if parts.scheme and parts.netloc:
+            return f"{parts.scheme}://{parts.netloc}"
+        return text
+
     @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
     @classmethod
     def _parse_cors_allowed_origins(cls, value: Union[str, List[str], None]):
@@ -68,13 +86,17 @@ class Settings(BaseSettings):
         vírgula (`https://a.com,https://b.com`) — não exige JSON válido.
         Em painéis como o EasyPanel, digitar JSON válido numa caixa de
         texto de variável de ambiente é uma fonte comum de erro (aspas
-        erradas, colchete esquecido etc.), e cada erro aqui antes derrubava
+        erradas, colchete esquecido, colar a URL inteira com `/caminho`
+        no final em vez de só a origem), e cada erro aqui antes derrubava
         o backend inteiro na inicialização. Se vier algo que já parece JSON
-        (começa com `[`), tentamos JSON primeiro; se falhar, caímos pro
-        parse por vírgula mesmo assim, em vez de recusar subir.
-        """
-        if value is None or isinstance(value, list):
+        (começa com `[`), tentamos JSON primeiro; se falhar (ou não for uma
+        lista), caímos pro parse por vírgula mesmo assim, em vez de recusar
+        subir — e cada item passa por `_clean_origin` pra virar só a
+        origem, mesmo que tenha vindo com lixo grudado."""
+        if value is None:
             return value
+        if isinstance(value, list):
+            return [cls._clean_origin(str(v)) for v in value if cls._clean_origin(str(v))]
         if not isinstance(value, str):
             return value
         text = value.strip()
@@ -84,19 +106,15 @@ class Settings(BaseSettings):
             try:
                 parsed = json.loads(text)
             except (json.JSONDecodeError, ValueError):
-                # JSON quase certo mas malformado (ex.: aspas simples em vez
-                # de duplas) — tira os colchetes e cai pro parse por vírgula
-                # abaixo, em vez de tratar o texto inteiro como uma origem só.
-                if text.endswith("]"):
-                    text = text[1:-1]
+                pass
             else:
                 if isinstance(parsed, list):
-                    return [str(item).strip() for item in parsed if str(item).strip()]
-        return [
-            origin.strip().strip("'\"")
-            for origin in text.split(",")
-            if origin.strip().strip("'\"")
-        ]
+                    return [
+                        cls._clean_origin(str(item))
+                        for item in parsed
+                        if cls._clean_origin(str(item))
+                    ]
+        return [cls._clean_origin(origin) for origin in text.split(",") if cls._clean_origin(origin)]
 
     # --- Mercado Pago / PIX (sem defaults — segredo fica só em ambiente) ---
     # Na prática, quem manda são as credenciais guardadas em PaymentConfig

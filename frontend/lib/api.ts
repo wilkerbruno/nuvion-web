@@ -217,6 +217,9 @@ export interface AIToolPublic {
   description: string | null;
   category: string | null;
   tags: string[];
+  observations: string | null;
+  proxy_id: string | null;
+  block_extensions: boolean;
   is_featured: boolean;
   login_method: string;
   is_favorite: boolean;
@@ -228,12 +231,103 @@ export interface AIToolCreatePayload {
   description?: string;
   category?: string;
   tags?: string[];
+  observations?: string;
+  proxy_id?: string;
+  login_method?: string;
   is_featured?: boolean;
+  block_extensions?: boolean;
 }
+
+// Todos os campos opcionais — só o que for enviado é alterado
+// (backend usa `exclude_unset=True`, ver AIToolUpdate em app/schemas/ai_tool.py).
+export type AIToolUpdatePayload = Partial<AIToolCreatePayload>;
 
 export interface FavoriteToggleResponse {
   ai_tool_id: string;
   is_favorite: boolean;
+}
+
+// --- Proxies (pessoais em /proxies, globais/admin em /admin/proxies) ---
+
+export interface ProxyPublic {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  proxy_type: string;
+  username: string | null;
+  password: string | null;
+  is_active: boolean;
+  is_selected: boolean;
+  status: string;
+  response_time: number | null;
+}
+
+export interface ProxyCreatePayload {
+  name: string;
+  host: string;
+  port: number;
+  proxy_type: "HTTP" | "HTTPS" | "SOCKS4" | "SOCKS5";
+  username?: string;
+  password?: string;
+}
+
+export type ProxyUpdatePayload = Partial<ProxyCreatePayload> & { is_active?: boolean };
+
+// --- Recompensas — admin (/admin/rewards) ---
+
+export interface RewardAdminItem {
+  id: string;
+  icon: string;
+  title: string;
+  description: string;
+  points: number;
+  available: boolean;
+}
+
+export interface RewardCreatePayload {
+  icon?: string;
+  title: string;
+  description?: string;
+  points: number;
+  available?: boolean;
+}
+
+export type RewardUpdatePayload = Partial<RewardCreatePayload>;
+
+// --- Credenciais diretas / cookies por ferramenta de IA (admin escreve,
+// qualquer usuário autenticado lê só o resumo — nunca o segredo) ---
+
+export interface DirectCredentialsSummary {
+  configured: boolean;
+  username?: string | null;
+  login_url?: string | null;
+  is_active?: boolean | null;
+  login_status?: string | null;
+  failed_attempts?: number | null;
+  max_attempts?: number | null;
+}
+
+export interface DirectCredentialsSetPayload {
+  username: string;
+  password: string;
+  login_url?: string;
+  username_selector?: string;
+  password_selector?: string;
+  submit_selector?: string;
+}
+
+export interface CookieSessionSummary {
+  configured: boolean;
+  id?: string | null;
+  domain?: string | null;
+  cookies_count?: number | null;
+  status?: string | null;
+  is_active?: boolean | null;
+  is_enabled?: boolean | null;
+  expires_at?: string | null;
+  created_at?: string | null;
+  source_file?: string | null;
 }
 
 export interface NotificationPublic {
@@ -323,11 +417,77 @@ export const api = {
   createAITool: (payload: AIToolCreatePayload) =>
     request<AIToolPublic>("/ai-tools", { method: "POST", auth: true, body: JSON.stringify(payload) }),
 
+  updateAITool: (toolId: string, payload: AIToolUpdatePayload) =>
+    request<AIToolPublic>(`/ai-tools/${toolId}`, {
+      method: "PATCH",
+      auth: true,
+      body: JSON.stringify(payload),
+    }),
+
   deleteAITool: (toolId: string) =>
     request<void>(`/ai-tools/${toolId}`, { method: "DELETE", auth: true }),
 
   toggleFavorite: (toolId: string) =>
     request<FavoriteToggleResponse>(`/ai-tools/${toolId}/favorite`, { method: "POST", auth: true }),
+
+  // --- Credenciais/cookies por ferramenta (leitura: qualquer usuário; escrita: admin) ---
+  aiToolCredentials: (toolId: string) =>
+    request<DirectCredentialsSummary>(`/ai-tools/${toolId}/credentials`, { auth: true }),
+
+  setAIToolCredentials: (toolId: string, payload: DirectCredentialsSetPayload) =>
+    request<DirectCredentialsSummary>(`/ai-tools/${toolId}/credentials`, {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(payload),
+    }),
+
+  deleteAIToolCredentials: (toolId: string) =>
+    request<void>(`/ai-tools/${toolId}/credentials`, { method: "DELETE", auth: true }),
+
+  aiToolCookies: (toolId: string) =>
+    request<CookieSessionSummary>(`/ai-tools/${toolId}/cookies`, { auth: true }),
+
+  setAIToolCookies: (toolId: string, cookiesData: Record<string, unknown>[]) =>
+    request<CookieSessionSummary>(`/ai-tools/${toolId}/cookies`, {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify({ cookies_data: cookiesData }),
+    }),
+
+  deleteAIToolCookies: (toolId: string) =>
+    request<void>(`/ai-tools/${toolId}/cookies`, { method: "DELETE", auth: true }),
+
+  // --- Proxies globais/admin (atribuíveis a uma ferramenta via proxy_id) ---
+  adminProxies: () => request<ProxyPublic[]>("/admin/proxies", { auth: true }),
+
+  createAdminProxy: (payload: ProxyCreatePayload) =>
+    request<ProxyPublic>("/admin/proxies", { method: "POST", auth: true, body: JSON.stringify(payload) }),
+
+  updateAdminProxy: (proxyId: string, payload: ProxyUpdatePayload) =>
+    request<ProxyPublic>(`/admin/proxies/${proxyId}`, {
+      method: "PATCH",
+      auth: true,
+      body: JSON.stringify(payload),
+    }),
+
+  deleteAdminProxy: (proxyId: string) =>
+    request<void>(`/admin/proxies/${proxyId}`, { method: "DELETE", auth: true }),
+
+  // --- Recompensas — admin ---
+  adminRewards: () => request<RewardAdminItem[]>("/admin/rewards", { auth: true }),
+
+  createReward: (payload: RewardCreatePayload) =>
+    request<RewardAdminItem>("/admin/rewards", { method: "POST", auth: true, body: JSON.stringify(payload) }),
+
+  updateReward: (rewardId: string, payload: RewardUpdatePayload) =>
+    request<RewardAdminItem>(`/admin/rewards/${rewardId}`, {
+      method: "PATCH",
+      auth: true,
+      body: JSON.stringify(payload),
+    }),
+
+  deleteReward: (rewardId: string) =>
+    request<void>(`/admin/rewards/${rewardId}`, { method: "DELETE", auth: true }),
 
   // --- Notificações ---
   myNotifications: (includeRead = false) =>

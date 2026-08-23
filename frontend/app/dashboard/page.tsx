@@ -82,6 +82,7 @@ export default function DashboardPage() {
             {unreadCount > 0 && <span className="nav-badge">{unreadCount}</span>}
           </Link>
           <Link href="/downloads">Downloads</Link>
+          {user.account_type === "Admin" && <Link href="/admin">Área administrativa</Link>}
         </nav>
 
         {data.is_blocked && <div className="error">{data.block_message}</div>}

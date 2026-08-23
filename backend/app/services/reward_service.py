@@ -12,6 +12,12 @@ Diferenças em relação ao original:
   `app/data/diamond_platform_config.json` SEM as credenciais do MP, que já
   são geridas por `PaymentConfig` no banco (Fase 3) — ver o comentário no
   próprio arquivo JSON.
+- O catálogo de recompensas em si (os itens, não as taxas) DEIXOU de vir
+  desse JSON — agora mora na tabela `rewards` (app/models/reward.py),
+  editável por admin via `/admin/rewards`. O JSON continua sendo a fonte
+  de `diamond_rate`/`min_payment`/`referral_reward`/`signup_bonus` (taxas
+  da plataforma como um todo, não recompensas individuais) e também a
+  semente inicial do catálogo — ver `seed_default_rewards` abaixo.
 
 Os diamantes continuam persistidos em `User.profile_settings` (JSON), sob
 as mesmas chaves do app desktop: "diamonds", "transactions",
@@ -40,13 +46,57 @@ def _load_config() -> dict:
         return json.load(fh)
 
 
-def get_rewards_catalog() -> List[dict]:
-    """Retorna o catálogo de recompensas resgatáveis por diamantes."""
-    return list(_load_config().get("rewards", []))
+def _reward_to_dict(reward) -> dict:
+    return {
+        "id": reward.id,
+        "icon": reward.icon,
+        "title": reward.title,
+        "description": reward.description,
+        "points": reward.points,
+        "available": reward.available,
+    }
 
 
-def get_reward_by_id(reward_id: str) -> Optional[dict]:
-    return next((r for r in get_rewards_catalog() if r["id"] == reward_id), None)
+def get_rewards_catalog(db: Session) -> List[dict]:
+    """Retorna o catálogo de recompensas resgatáveis por diamantes (tabela
+    `rewards` — não vem mais do JSON, ver docstring do módulo)."""
+    from app.crud import reward as reward_crud
+
+    return [_reward_to_dict(r) for r in reward_crud.list_all(db)]
+
+
+def get_reward_by_id(db: Session, reward_id: str) -> Optional[dict]:
+    from app.crud import reward as reward_crud
+
+    reward = reward_crud.get(db, reward_id)
+    return _reward_to_dict(reward) if reward is not None else None
+
+
+def seed_default_rewards(db: Session) -> int:
+    """Semeia a tabela `rewards` com os itens que estavam no catálogo antigo
+    (JSON) — só insere algo se a tabela estiver vazia, então nunca
+    sobrescreve nem ressuscita recompensas que um admin já criou/editou/
+    removeu depois. Chamado só em dois lugares, logo depois de a tabela
+    `rewards` ser criada: `scripts/sync_schema_live.py` (produção/deploy) e
+    `tests/conftest.py` (suíte de testes, banco SQLite novo por teste).
+    Retorna quantas recompensas foram inseridas."""
+    from app.crud import reward as reward_crud
+
+    if reward_crud.list_all(db):
+        return 0
+
+    seeded = 0
+    for item in _load_config().get("rewards", []):
+        reward_crud.create(
+            db,
+            icon=item.get("icon", "🎁"),
+            title=item["title"],
+            description=item.get("description", ""),
+            points=int(item.get("points", 0)),
+            available=bool(item.get("available", True)),
+        )
+        seeded += 1
+    return seeded
 
 
 def get_referral_reward_amount() -> int:
@@ -201,7 +251,7 @@ def claim_reward(db: Session, user: User, reward_id: str) -> Tuple[bool, str]:
 
     Retorna (sucesso, mensagem).
     """
-    reward = get_reward_by_id(reward_id)
+    reward = get_reward_by_id(db, reward_id)
     if reward is None:
         return False, "Recompensa não encontrada"
     if not reward.get("available", True):

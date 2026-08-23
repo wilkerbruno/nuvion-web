@@ -19,6 +19,7 @@ from app.models.notification import Notification
 from app.models.payment import Payment
 from app.models.payment_config import PaymentConfig
 from app.models.proxy import Proxy
+from app.models.reward import Reward
 from app.models.user import User
 from app.models.user_favorite import UserFavorite
 from app.models.user_session import UserSession
@@ -41,4 +42,5 @@ __all__ = [
     "DeviceData",
     "Notification",
     "Expense",
+    "Reward",
 ]

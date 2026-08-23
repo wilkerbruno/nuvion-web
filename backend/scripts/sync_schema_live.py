@@ -24,7 +24,12 @@ aditivo:
      posição, e nenhum valor antigo é removido da lista. ("boleto" existiu
      brevemente nesta migração e foi removido do produto antes de qualquer
      uso em produção — nunca chegou a entrar nesse ENUM em banco real.)
-  4. Reporta (sem alterar nada) qualquer outra diferença de coluna que
+  4. Se a tabela `rewards` for criada agora pela primeira vez (catálogo de
+     recompensas, antes um arquivo JSON estático — ver
+     app/services/reward_service.py), semeia nela os itens que estavam
+     nesse JSON, pra não "sumir" o catálogo que já estava no ar. Só insere
+     em tabela vazia — nunca roda de novo depois da primeira vez.
+  5. Reporta (sem alterar nada) qualquer outra diferença de coluna que
      encontrar entre o schema do banco e o schema esperado pelo backend,
      para você decidir manualmente — este script não tenta adivinhar
      mudanças além das listadas acima.
@@ -56,6 +61,7 @@ from typing import List, Tuple
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import sessionmaker
 
 from app.core.logging import LOGGER
 from app.models import Base  # noqa: F401 — importar registra todas as tabelas em Base.metadata
@@ -209,10 +215,32 @@ def _add_extra_for_column(engine: Engine, table_name: str, col_name: str) -> Non
             )
 
 
+def _seed_new_tables(engine: Engine, plan: SyncPlan) -> None:
+    """Semeia dados default em tabelas que acabaram de ser criadas pela
+    primeira vez — hoje só `rewards` (catálogo antes vindo de
+    diamond_platform_config.json, ver app/services/reward_service.py). Só
+    roda quando a tabela realmente não existia antes: é idempotente por
+    natureza (o próprio `seed_default_rewards` só insere em tabela vazia),
+    mas isso evita até abrir a sessão à toa numa tabela que já existia."""
+    if "rewards" not in plan.tables_to_create:
+        return
+    from app.services.reward_service import seed_default_rewards
+
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+    try:
+        count = seed_default_rewards(session)
+        if count:
+            print(f"✓ Catálogo de recompensas semeado com {count} item(ns) do JSON antigo")
+    finally:
+        session.close()
+
+
 def apply_plan(engine: Engine, plan: SyncPlan) -> None:
     if plan.tables_to_create:
         Base.metadata.create_all(bind=engine, checkfirst=True)
         print(f"✓ Tabela(s) criada(s): {', '.join(plan.tables_to_create)}")
+        _seed_new_tables(engine, plan)
 
     for table_name, col_name, ddl in plan.columns_to_add:
         with engine.begin() as conn:

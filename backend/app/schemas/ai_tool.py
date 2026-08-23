@@ -39,6 +39,9 @@ class AIToolPublic(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     tags: List[str] = []
+    observations: Optional[str] = None
+    proxy_id: Optional[str] = None
+    block_extensions: bool = False
     is_featured: bool
     login_method: str
     is_favorite: bool = False
