@@ -204,22 +204,21 @@ async function cookieStoreIdForTab(tabId) {
 // caímos de volta numa janela comum (com o aviso claro pro usuário via
 // `isolated: false` no retorno de `launchTool`).
 //
-// `type: "popup"` em vez de "normal": os favoritos continuam sendo os
-// mesmos do perfil (o Chrome não separa favoritos entre modo normal e
-// anônimo — não tem como isolar isso, nem em janela anônima), mas uma
-// janela popup abre sem barra de favoritos, sem abas e sem o menu do
-// Chrome visível, então na prática some a poluição visual dos seus
-// favoritos pessoais em cima da ferramenta.
+// `type: "normal"` (não "popup"): o Chrome não permite ter abas múltiplas
+// E esconder a barra de favoritos ao mesmo tempo — só "janela completa"
+// (as duas coisas) ou "popup" (nenhuma das duas). Como o problema da barra
+// de favoritos já foi resolvido pelos favoritos próprios da extensão (ver
+// `injectBookmarkWidget` abaixo), aqui prioriza abas múltiplas normais.
 async function openLaunchWindow(url) {
   try {
-    const win = await chrome.windows.create({ url, type: "popup", focused: true, incognito: true });
+    const win = await chrome.windows.create({ url, type: "normal", focused: true, incognito: true });
     return { window: win, isolated: true };
   } catch (err) {
     console.error(
       "[Nuvion] Não foi possível abrir em modo anônimo — verifique se 'Permitir em modo anônimo' está ativado para a extensão em chrome://extensions. Abrindo em janela comum como alternativa:",
       err
     );
-    const win = await chrome.windows.create({ url, type: "popup", focused: true });
+    const win = await chrome.windows.create({ url, type: "normal", focused: true });
     return { window: win, isolated: false };
   }
 }
